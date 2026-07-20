@@ -4,6 +4,7 @@ import {
   assignBranchManager,
   getBranchOpeningAssessment,
   setBranchManagerControl,
+  setBranchMarketingBudget,
   setBranchPriority,
   setBranchUpgradeAuthority,
   startBranchProjectV7,
@@ -60,8 +61,8 @@ function bestProfile(district: District): BranchProfile {
 }
 function branchMetrics(branch: BranchOffice) {
   const customers = branch.localCustomers ?? Math.min(branch.capacity, 260 + branch.level * 100);
-  const revenue = branch.lastMonthRevenue ?? customers * 70;
-  const cost = branch.lastMonthCost ?? branch.monthlyRent + branch.staffSlots * 5_400;
+  const revenue = branch.lastMonthRevenue ?? customers * 125;
+  const cost = branch.lastMonthCost ?? branch.monthlyRent + branch.staffSlots * 4_850 + (branch.managerBudget ?? 0);
   const profit = branch.lastMonthProfit ?? revenue - cost;
   const capacity = customers / Math.max(1, branch.capacity) * 100;
   return { customers, revenue, cost, profit, capacity, deposits: branch.localDeposits ?? 0, loans: branch.localLoans ?? 0 };
@@ -69,10 +70,17 @@ function branchMetrics(branch: BranchOffice) {
 function branchStatus(branch: BranchOffice) {
   const metrics = branchMetrics(branch);
   if (!branch.managerId) return { key: "vacant", label: "Needs manager" };
-  if (metrics.profit < 0) return { key: "loss", label: "Loss-making" };
+  if (metrics.profit < -50_000) return { key: "loss", label: "Loss-making" };
+  if (metrics.profit < 0) return { key: "building", label: "Near break-even" };
   if (metrics.capacity > 92) return { key: "pressure", label: "Capacity pressure" };
   if (branch.pendingUpgradeRecommendation) return { key: "review", label: "Upgrade review" };
   return { key: "healthy", label: "Healthy" };
+}
+function marketingDescription(budget: number) {
+  if (budget === 0) return "No paid local activity. Growth relies on reputation and walk-ins.";
+  if (budget < 20_000) return "Light local presence with controlled cost.";
+  if (budget < 55_000) return "Active local acquisition with a balanced cost level.";
+  return "Strong growth push. Useful when the branch has spare service capacity.";
 }
 
 export function NetworkPage({ game, action }: { game: GameState; action: GameAction }) {
@@ -94,8 +102,9 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
   const portfolio = useMemo(() => game.branchOffices.map((branch) => ({ branch, metrics: branchMetrics(branch), status: branchStatus(branch), manager: game.employeeRoster.find((employee) => employee.id === branch.managerId) })), [game.branchOffices, game.employeeRoster]);
   const totalProfit = portfolio.reduce((sum, item) => sum + item.metrics.profit, 0);
   const totalCustomers = portfolio.reduce((sum, item) => sum + item.metrics.customers, 0);
+  const totalMarketing = portfolio.reduce((sum, item) => sum + (item.branch.managerBudget ?? 0), 0);
   const vacant = portfolio.filter((item) => !item.branch.managerId).length;
-  const attention = portfolio.filter((item) => item.status.key !== "healthy").length;
+  const attention = portfolio.filter((item) => item.status.key !== "healthy" && item.status.key !== "building").length;
   const strongest = [...portfolio].sort((a, b) => b.metrics.profit - a.metrics.profit)[0];
   const weakest = [...portfolio].sort((a, b) => a.metrics.profit - b.metrics.profit)[0];
 
@@ -106,14 +115,14 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
 
   return <>
     <section className="network-overview-hero panel">
-      <div><p className="eyebrow">BRANCH NETWORK</p><h2>Manage outcomes, not daily branch tasks</h2><p>Managers run each location. The COO allocates capacity and prepares upgrades. You set priorities and approve only major investments.</p></div>
+      <div><p className="eyebrow">BRANCH NETWORK</p><h2>Manage outcomes, not daily branch tasks</h2><p>Managers run each location, use the local marketing ceiling and solve normal staffing pressure. You set priorities and approve only major investments.</p></div>
       <button className="primary" onClick={() => setMapOpen(true)}>Open market map</button>
     </section>
 
     <section className="network-kpi-row">
       <Metric label="Monthly network result" value={money.format(totalProfit)} tone={totalProfit >= 0 ? "positive" : "negative"} />
       <Metric label="Branch customers" value={totalCustomers.toLocaleString("en-GB")} />
-      <Metric label="Locations" value={`${game.branchOffices.length}`} />
+      <Metric label="Local marketing" value={`${money.format(totalMarketing)}/mo`} />
       <Metric label="Need attention" value={`${attention}`} tone={attention > 0 ? "warning" : "positive"} />
       <Metric label="Manager vacancies" value={`${vacant}`} tone={vacant > 0 ? "warning" : "positive"} />
     </section>
@@ -142,15 +151,24 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
     {selectedBranch && selectedMetrics && <section className="branch-management-layout">
       <article className="panel branch-result-panel">
         <div className="panel-heading"><div><p className="eyebrow">SELECTED BRANCH</p><h3>{selectedBranch.name}</h3></div><strong className={selectedMetrics.profit >= 0 ? "positive" : "negative"}>{money.format(selectedMetrics.profit)}/mo</strong></div>
-        <div className="branch-result-grid"><Metric label="Revenue" value={money.format(selectedMetrics.revenue)} /><Metric label="Operating cost" value={money.format(selectedMetrics.cost)} /><Metric label="Deposits" value={money.format(selectedMetrics.deposits)} /><Metric label="Loans" value={money.format(selectedMetrics.loans)} /><Metric label="Satisfaction" value={`${selectedBranch.satisfaction.toFixed(0)}`} /><Metric label="Lifetime result" value={money.format(selectedBranch.lifetimeProfit ?? 0)} /></div>
+        <div className="branch-result-grid"><Metric label="Revenue" value={money.format(selectedMetrics.revenue)} /><Metric label="Operating cost" value={money.format(selectedMetrics.cost)} /><Metric label="Local marketing" value={money.format(selectedBranch.managerBudget ?? 0)} /><Metric label="Deposits" value={money.format(selectedMetrics.deposits)} /><Metric label="Loans" value={money.format(selectedMetrics.loans)} /><Metric label="Satisfaction" value={`${selectedBranch.satisfaction.toFixed(0)}`} /><Metric label="Lifetime result" value={money.format(selectedBranch.lifetimeProfit ?? 0)} /></div>
         <div className="manager-accountability"><small>LATEST MANAGEMENT ACTION</small><strong>{selectedBranch.lastManagerAction ?? "Waiting for the next monthly management review."}</strong></div>
       </article>
 
       <article className="panel simplified-branch-controls">
-        <div className="panel-heading"><div><p className="eyebrow">MANAGEMENT RULES</p><h3>Three settings only</h3></div></div>
+        <div className="panel-heading"><div><p className="eyebrow">MANAGEMENT RULES</p><h3>Four settings only</h3></div></div>
         <label className="manager-select-row"><span><strong>Accountable manager</strong><small>COO can fill this automatically when manager control is enabled.</small></span><select value={selectedBranch.managerId ?? ""} onChange={(event) => action((state) => assignBranchManager(state, selectedBranch.id, event.target.value || null))}><option value="">No manager</option>{eligibleManagers.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · leadership {employee.leadership}</option>)}</select></label>
         <label className="management-checkbox"><input type="checkbox" checked={selectedBranch.managerControl ?? false} onChange={(event) => action((state) => setBranchManagerControl(state, selectedBranch.id, event.target.checked))} /><span><strong>Manager runs this branch</strong><small>Daily service, local campaigns, staffing pressure and routine decisions are handled automatically.</small></span></label>
         <label className="compact-control"><span><strong>Operating priority</strong><small>{priorityCopy[selectedBranch.operatingPriority ?? "balanced"]}</small></span><select value={selectedBranch.operatingPriority ?? "balanced"} onChange={(event) => action((state) => setBranchPriority(state, selectedBranch.id, event.target.value as BranchPriority))}>{priorities.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></label>
+
+        <div className="branch-marketing-control">
+          <div><strong>Local marketing ceiling</strong><small>{marketingDescription(selectedBranch.managerBudget ?? 0)}</small></div>
+          <div className="branch-marketing-value"><span>{money.format(selectedBranch.managerBudget ?? 0)}</span><small>per month</small></div>
+          <input aria-label="Local marketing budget" type="range" min="0" max="120000" step="5000" value={selectedBranch.managerBudget ?? 0} onChange={(event) => action((state) => setBranchMarketingBudget(state, selectedBranch.id, Number(event.target.value)))} />
+          <div className="branch-marketing-presets"><button onClick={() => action((state) => setBranchMarketingBudget(state, selectedBranch.id, 0))}>Off</button><button onClick={() => action((state) => setBranchMarketingBudget(state, selectedBranch.id, 25_000))}>Steady</button><button onClick={() => action((state) => setBranchMarketingBudget(state, selectedBranch.id, 60_000))}>Growth</button></div>
+          <p>{selectedManager?.name ?? "The branch manager"} controls the actual campaign mix inside this ceiling. More spend only helps while the branch has capacity to serve the new customers.</p>
+        </div>
+
         <label className="compact-control"><span><strong>Upgrade authority</strong><small>{upgradeOptions.find((item) => item.key === (selectedBranch.upgradeAuthority ?? "profitable"))?.detail}</small></span><select value={selectedBranch.upgradeAuthority ?? "profitable"} onChange={(event) => action((state) => setBranchUpgradeAuthority(state, selectedBranch.id, event.target.value as UpgradeAuthority))}>{upgradeOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
 
         {selectedBranch.pendingUpgradeRecommendation && <div className="upgrade-recommendation"><div><small>COO RECOMMENDATION</small><strong>Expand this branch</strong><p>Capacity and local economics support a larger location. The project still uses the normal capital checks.</p></div><button className="primary small" onClick={() => action((state) => approveBranchUpgradeRecommendation(state, selectedBranch.id))}>Approve upgrade</button></div>}
