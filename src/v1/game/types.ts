@@ -1,4 +1,8 @@
 export type BankStrategy = 'balanced' | 'mortgages' | 'small-business' | 'service';
+export type LendingPolicy = 'cautious' | 'balanced' | 'growth';
+export type BranchMandate = 'profit' | 'balanced' | 'growth' | 'service';
+export type StaffingPolicy = 'lean' | 'balanced' | 'growth';
+export type BranchMarket = 'residential' | 'mixed' | 'business';
 export type EmployeeRole = 'branch-manager' | 'lending-advisor' | 'customer-advisor';
 export type InboxKind = 'report' | 'decision' | 'warning';
 
@@ -35,7 +39,9 @@ export interface BranchMonthReport {
 export interface Branch {
   id: string;
   name: string;
-  market: 'residential' | 'mixed' | 'business';
+  market: BranchMarket;
+  mandate: BranchMandate;
+  staffingPolicy: StaffingPolicy;
   reputation: number;
   customers: number;
   deposits: number;
@@ -64,12 +70,13 @@ export interface GameDate {
 
 export interface GameState {
   saveVersion: 1;
-  gameVersion: '1.0.0-alpha.1';
+  gameVersion: string;
   bankName: string;
   date: GameDate;
   cash: number;
   equity: number;
   strategy: BankStrategy;
+  lendingPolicy: LendingPolicy;
   branches: Branch[];
   inbox: InboxItem[];
 }
