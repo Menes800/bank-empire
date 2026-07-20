@@ -1,0 +1,98 @@
+/* v0.9 readability floor — designed from the actual MacBook playtest. */
+.main-content-v9 p {
+  font-size: 13px !important;
+  line-height: 1.55;
+}
+.main-content-v9 small {
+  font-size: 11px !important;
+  line-height: 1.4;
+}
+.main-content-v9 button,
+.main-content-v9 select,
+.main-content-v9 input {
+  font-size: 12px !important;
+}
+.main-content-v9 .eyebrow {
+  font-size: 10px !important;
+  letter-spacing: .09em;
+}
+.main-content-v9 .panel {
+  padding: 18px;
+}
+.app-v9[data-density="compact"] .main-content-v9 .panel {
+  padding: 14px;
+}
+.main-content-v9 .panel-heading h3 {
+  font-size: 18px;
+}
+.main-header-v9 h1 {
+  font-size: clamp(30px, 2.4vw, 38px);
+}
+.main-header-v9 .header-actions button,
+.main-header-v9 .cash-pill,
+.main-header-v9 .inbox-header-chip,
+.main-header-v9 .nearest-project-chip,
+.main-header-v9 .density-toggle {
+  min-height: 40px;
+}
+.sidebar-v9 .logo strong {
+  font-size: 13px;
+}
+.sidebar-v9 .logo small,
+.sidebar-v9 .sidebar-footer small {
+  font-size: 10px;
+}
+.sidebar-v9 .nav-group > p {
+  font-size: 9px;
+}
+.sidebar-v9 .nav-item {
+  min-height: 39px;
+  padding: 8px;
+}
+.sidebar-v9 .nav-item strong {
+  font-size: 12px;
+}
+.sidebar-v9 .nav-code {
+  width: 29px;
+  height: 27px;
+  font-size: 9px;
+}
+.v9-decision-heading strong {
+  font-size: 15px;
+}
+.v9-decision-heading > b,
+.v9-risk-driver-list b,
+.v9-tech-node > header {
+  font-size: 9px;
+}
+.v9-task-actions button,
+.v9-decision-options button {
+  min-height: 42px;
+}
+.v9-scroll-table > button,
+.v9-archive-table > div,
+.main-content-v9 .department-table > div,
+.main-content-v9 .employee-roster-table > button {
+  min-height: 52px;
+  font-size: 12px;
+}
+.v9-metric strong {
+  font-size: 19px;
+}
+.v9-metric span {
+  font-size: 11px;
+}
+.v9-command-hero p:not(.eyebrow) {
+  font-size: 13px !important;
+}
+
+@media (max-width: 1180px) {
+  .main-content-v9 p { font-size: 12.5px !important; }
+  .main-content-v9 small { font-size: 10.5px !important; }
+}
+
+@media (max-width: 760px) {
+  .main-content-v9 p { font-size: 13px !important; }
+  .main-content-v9 small { font-size: 11px !important; }
+  .main-content-v9 .panel { padding: 15px; }
+}
