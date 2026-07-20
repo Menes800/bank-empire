@@ -134,7 +134,8 @@ const simulateBranch = (
   if (remainingQueue.length === 0 && fullQueue.length > 0) {
     managerActions.push('Teamet behandlet hele lånekøen denne måneden.');
   }
-  if (profit > 0 && branch.reports.at(-1)?.profit <= 0) {
+  const previousReport = branch.reports.at(-1);
+  if (profit > 0 && previousReport && previousReport.profit <= 0) {
     managerActions.push('Filialen gikk over i månedlig overskudd.');
   }
 
