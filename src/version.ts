@@ -1,2 +1,2 @@
-export const APP_VERSION = "0.7.0";
-export const APP_RELEASE_NAME = "Banking Operations";
+export const APP_VERSION = "0.8.0";
+export const APP_RELEASE_NAME = "Management Overhaul";
