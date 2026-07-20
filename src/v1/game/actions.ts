@@ -16,6 +16,7 @@ import type {
   CampaignScope,
   ExecutiveRole,
   GameState,
+  InboxItem,
   LendingPolicy,
   ProductId,
   StaffingPolicy,
@@ -30,6 +31,8 @@ const updateBranch = (
   ...state,
   branches: state.branches.map((branch) => (branch.id === branchId ? updater(branch) : branch)),
 });
+
+const prependInbox = (state: GameState, item: InboxItem): InboxItem[] => [item, ...state.inbox].slice(0, 60);
 
 export const setBankStrategy = (state: GameState, strategy: BankStrategy): GameState => ({ ...state, strategy });
 export const setBankLendingPolicy = (state: GameState, lendingPolicy: LendingPolicy): GameState => ({ ...state, lendingPolicy });
@@ -69,18 +72,15 @@ export const openExpansionBranch = (state: GameState, opportunityId: string): Ga
     countries: state.countries.map((country) =>
       country.code === opportunity.country ? { ...country, entered: true, awareness: Math.max(country.awareness, 18) } : country,
     ),
-    inbox: [
-      {
-        id: `opened-${opportunity.id}-${monthKey}`,
-        monthKey,
-        kind: 'milestone',
-        title: `${opportunity.name} er åpnet`,
-        body: `${firstInCountry ? `Northline Bank er nå etablert i ${countryDefinition.code}. ` : ''}Det lokale teamet er på plass og driver filialen innenfor mandatet ditt.`,
-        branchId: branch.id,
-        read: false,
-      },
-      ...state.inbox,
-    ].slice(0, 60),
+    inbox: prependInbox(state, {
+      id: `opened-${opportunity.id}-${monthKey}`,
+      monthKey,
+      kind: 'milestone',
+      title: `${opportunity.name} er åpnet`,
+      body: `${firstInCountry ? `${state.bankName} er nå etablert i ${countryDefinition.code}. ` : ''}Det lokale teamet er på plass og driver filialen innenfor mandatet ditt.`,
+      branchId: branch.id,
+      read: false,
+    }),
   };
 };
 
@@ -93,17 +93,14 @@ export const closeBranch = (state: GameState, branchId: string): GameState => {
     ...state,
     cash: state.cash + recovery,
     branches: state.branches.filter((item) => item.id !== branchId),
-    inbox: [
-      {
-        id: `closed-${branchId}-${state.date.year}-${state.date.month}`,
-        monthKey: formatMonthKey(state.date.year, state.date.month),
-        kind: 'warning',
-        title: `${branch.name} er avviklet`,
-        body: `Kundene og utlånsporteføljen er overført til resten av banken. Avviklingen frigjorde ${recovery.toLocaleString('nb-NO')} kr.`,
-        read: false,
-      },
-      ...state.inbox,
-    ],
+    inbox: prependInbox(state, {
+      id: `closed-${branchId}-${state.date.year}-${state.date.month}`,
+      monthKey: formatMonthKey(state.date.year, state.date.month),
+      kind: 'warning',
+      title: `${branch.name} er avviklet`,
+      body: `Kundene og utlånsporteføljen er overført til resten av banken. Avviklingen frigjorde ${recovery.toLocaleString('nb-NO')} kr.`,
+      read: false,
+    }),
   };
 };
 
@@ -117,17 +114,14 @@ export const activateProduct = (state: GameState, productId: ProductId): GameSta
     ...state,
     cash: state.cash - launchCost,
     products: state.products.map((product) => product.id === productId ? { ...product, enabled: true, quality: 52 } : product),
-    inbox: [
-      {
-        id: `product-${productId}-${state.date.year}-${state.date.month}`,
-        monthKey: formatMonthKey(state.date.year, state.date.month),
-        kind: 'milestone',
-        title: `${definition.name} er lansert`,
-        body: `Produktteamet og filialene tar over den løpende driften. Lanseringen kostet ${launchCost.toLocaleString('nb-NO')} kr.`,
-        read: false,
-      },
-      ...state.inbox,
-    ],
+    inbox: prependInbox(state, {
+      id: `product-${productId}-${state.date.year}-${state.date.month}`,
+      monthKey: formatMonthKey(state.date.year, state.date.month),
+      kind: 'milestone',
+      title: `${definition.name} er lansert`,
+      body: `Produktteamet og filialene tar over den løpende driften. Lanseringen kostet ${launchCost.toLocaleString('nb-NO')} kr.`,
+      read: false,
+    }),
   };
 };
 
@@ -152,17 +146,14 @@ export const hireExecutive = (state: GameState, role: ExecutiveRole): GameState 
     ...state,
     cash: state.cash - definition.signingCost,
     executives: state.executives.map((item) => item.role === role ? { ...item, hired: true } : item),
-    inbox: [
-      {
-        id: `executive-${role}-${state.date.year}-${state.date.month}`,
-        monthKey: formatMonthKey(state.date.year, state.date.month),
-        kind: 'milestone',
-        title: `${definition.title} er ansatt`,
-        body: `${definition.name} går inn i konsernledelsen og tar ansvar for sitt område.`,
-        read: false,
-      },
-      ...state.inbox,
-    ],
+    inbox: prependInbox(state, {
+      id: `executive-${role}-${state.date.year}-${state.date.month}`,
+      monthKey: formatMonthKey(state.date.year, state.date.month),
+      kind: 'milestone',
+      title: `${definition.title} er ansatt`,
+      body: `${definition.name} går inn i konsernledelsen og tar ansvar for sitt område.`,
+      read: false,
+    }),
   };
 };
 
@@ -176,17 +167,14 @@ export const upgradeTechnology = (state: GameState, technologyId: TechnologyId):
     ...state,
     cash: state.cash - cost,
     technologies: state.technologies.map((item) => item.id === technologyId ? { ...item, level: item.level + 1 } : item),
-    inbox: [
-      {
-        id: `technology-${technologyId}-${technology.level + 1}-${state.date.year}-${state.date.month}`,
-        monthKey: formatMonthKey(state.date.year, state.date.month),
-        kind: 'report',
-        title: `${definition.name} er oppgradert`,
-        body: `Nivå ${technology.level + 1} er satt i drift. Effekten brukes automatisk i hele banken.`,
-        read: false,
-      },
-      ...state.inbox,
-    ],
+    inbox: prependInbox(state, {
+      id: `technology-${technologyId}-${technology.level + 1}-${state.date.year}-${state.date.month}`,
+      monthKey: formatMonthKey(state.date.year, state.date.month),
+      kind: 'report',
+      title: `${definition.name} er oppgradert`,
+      body: `Nivå ${technology.level + 1} er satt i drift. Effekten brukes automatisk i hele banken.`,
+      read: false,
+    }),
   };
 };
 
@@ -213,17 +201,14 @@ export const launchCampaign = (
         startedMonth: monthKey,
       },
     ],
-    inbox: [
-      {
-        id: `campaign-start-${kind}-${scope}-${monthKey}`,
-        monthKey,
-        kind: 'report',
-        title: `${CAMPAIGN_LABELS[kind]} er startet`,
-        body: `Kampanjen går i ${duration} måneder med ${budget.toLocaleString('nb-NO')} kr per måned. Markedsavdelingen følger opp resultatene.`,
-        read: false,
-      },
-      ...state.inbox,
-    ],
+    inbox: prependInbox(state, {
+      id: `campaign-start-${kind}-${scope}-${monthKey}`,
+      monthKey,
+      kind: 'report',
+      title: `${CAMPAIGN_LABELS[kind]} er startet`,
+      body: `Kampanjen går i ${duration} måneder med ${budget.toLocaleString('nb-NO')} kr per måned. Markedsavdelingen følger opp resultatene.`,
+      read: false,
+    }),
   };
 };
 
