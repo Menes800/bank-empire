@@ -2,6 +2,7 @@ import { emptyGame } from "./engine";
 import type { GameState } from "./types";
 
 const STORAGE_KEY = "bank-empire-save-v4";
+const CHECKPOINT_KEY = "bank-empire-checkpoint-v5";
 const LEGACY_KEYS = ["bank-empire-save-v3", "bank-empire-save-v2", "bank-empire-save-v1"];
 
 export function loadGame(): GameState {
@@ -53,10 +54,31 @@ export function loadGame(): GameState {
 
 export function saveGame(state: GameState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (state.setupComplete && !state.gameOverReason && !state.pendingDecision && state.day >= 30 && state.day % 30 === 0) {
+    localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(state));
+  }
+}
+
+export function hasCheckpoint(): boolean {
+  return Boolean(localStorage.getItem(CHECKPOINT_KEY));
+}
+
+export function restoreCheckpoint(): GameState | null {
+  try {
+    const saved = localStorage.getItem(CHECKPOINT_KEY);
+    if (!saved) return null;
+    const state = JSON.parse(saved) as GameState;
+    const restored = { ...state, pendingDecision: null, gameOverReason: null, liquidityBreachDays: 0, capitalBreachDays: 0 };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
+    return restored;
+  } catch {
+    return null;
+  }
 }
 
 export function clearGame(): GameState {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(CHECKPOINT_KEY);
   LEGACY_KEYS.forEach((key) => localStorage.removeItem(key));
   return emptyGame();
 }
