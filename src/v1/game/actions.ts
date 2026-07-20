@@ -4,6 +4,7 @@ import { simulateNextMonth } from './simulateMonth';
 import type {
   BranchMandate,
   GameState,
+  InboxItem,
   LendingPolicy,
   StaffingPolicy,
 } from './types';
@@ -56,23 +57,21 @@ export const openExpansionBranch = (state: GameState, opportunityId: string): Ga
 
   const branch = createExpansionBranch(opportunity, state.branches.length);
   const monthKey = formatMonthKey(state.date.year, state.date.month);
+  const inboxItem: InboxItem = {
+    id: `opened-${opportunity.id}-${monthKey}`,
+    monthKey,
+    kind: 'report',
+    title: `${opportunity.name} er åpnet`,
+    body: 'Det lokale teamet er på plass. Filialen starter med vekstmandat og normal bemanningsfullmakt, men du kan justere rammene når som helst.',
+    branchId: branch.id,
+    read: false,
+  };
 
   return {
     ...state,
     cash: state.cash - opportunity.openingCost,
     equity: state.equity - Math.round(opportunity.openingCost * 0.15),
     branches: [...state.branches, branch],
-    inbox: [
-      {
-        id: `opened-${opportunity.id}-${monthKey}`,
-        monthKey,
-        kind: 'report',
-        title: `${opportunity.name} er åpnet`,
-        body: `Det lokale teamet er på plass. Filialen starter med vekstmandat og normal bemanningsfullmakt, men du kan justere rammene når som helst.`,
-        branchId: branch.id,
-        read: false,
-      },
-      ...state.inbox,
-    ].slice(0, 30),
+    inbox: [inboxItem, ...state.inbox].slice(0, 30),
   };
 };
