@@ -12,10 +12,11 @@ export * from "./v4/advisor";
 export * from "./v41/pacing";
 export * from "./v5/gameplay";
 export * from "./v6/gameplay";
+export * from "./v7/gameplay";
 
 export function emptyGame(): GameState {
   const base: GameState = {
-    version: 6,
+    version: 7,
     setupComplete: false,
     founderName: "",
     background: "Operations",
@@ -82,13 +83,16 @@ export function emptyGame(): GameState {
     events: [],
     gameOverReason: null,
     ...initialV4Fields(),
+    collectionCases: [],
+    ceoInbox: [],
+    competitorMoves: [],
   };
   return { ...base, objectives: createObjectives(base, 1), history: [historyPoint(base)] };
 }
 
 export function createCampaign(input: CampaignInput): GameState {
   const difficultyCash = input.difficulty === "relaxed" ? 10_000_000 : input.difficulty === "hard" ? 6_500_000 : 8_000_000;
-  let state: GameState = { ...emptyGame(), ...input, setupComplete: true, cash: difficultyCash };
+  let state: GameState = { ...emptyGame(), ...input, setupComplete: true, cash: difficultyCash, version: 7 };
 
   if (input.background === "Finance") {
     state = {
