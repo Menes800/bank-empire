@@ -1,52 +1,27 @@
 import type { GameState } from "../game/store";
 import { money } from "./format";
 
-export function DecisionModal({
-  game,
-  onChoose,
-}: {
-  game: GameState;
-  onChoose: (id: string) => void;
-}) {
+const displayText = (value: string) => value.replace(/NOK\s*/g, "$");
+
+export function DecisionModal({ game, onChoose }: { game: GameState; onChoose: (id: string) => void }) {
   if (!game.pendingDecision) return null;
   const crisis = game.pendingDecision.id.startsWith("v5-");
   return (
     <div className="modal-backdrop">
       <section className={crisis ? "decision-modal crisis-decision-modal" : "decision-modal"}>
-        <div className="modal-kicker">
-          {crisis ? "REGULATORY RECOVERY WINDOW" : `MANAGEMENT DECISION · ${game.pendingDecision.category}`}
-        </div>
+        <div className="modal-kicker">{crisis ? "REGULATORY RECOVERY WINDOW" : `MANAGEMENT DECISION · ${game.pendingDecision.category}`}</div>
         <h2>{game.pendingDecision.title}</h2>
-        <p>{game.pendingDecision.description}</p>
+        <p>{displayText(game.pendingDecision.description)}</p>
         {crisis && <div className="crisis-status-strip"><span><small>Liquid cash</small><b>{money.format(game.cash)}</b></span><span><small>Liquidity ratio</small><b>{game.liquidityRatio.toFixed(1)}%</b></span><span><small>Critical days</small><b>{Math.max(game.liquidityBreachDays, game.capitalBreachDays)}</b></span></div>}
         <div className="decision-choices">
-          {game.pendingDecision.choices.map((choice, index) => (
-            <button key={choice.id} onClick={() => onChoose(choice.id)} className={choice.id === "v5-accept-resolution" ? "danger-choice" : ""}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <strong>{choice.label}</strong>
-                <small>{choice.description}</small>
-              </div>
-              <b>→</b>
-            </button>
-          ))}
+          {game.pendingDecision.choices.map((choice, index) => <button key={choice.id} onClick={() => onChoose(choice.id)} className={choice.id === "v5-accept-resolution" ? "danger-choice" : ""}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{choice.label}</strong><small>{displayText(choice.description)}</small></div><b>→</b></button>)}
         </div>
       </section>
     </div>
   );
 }
 
-export function GameOverModal({
-  game,
-  onRestart,
-  onRetry,
-  canRetry,
-}: {
-  game: GameState;
-  onRestart: () => void;
-  onRetry: () => void;
-  canRetry: boolean;
-}) {
+export function GameOverModal({ game, onRestart, onRetry, canRetry }: { game: GameState; onRestart: () => void; onRetry: () => void; canRetry: boolean }) {
   if (!game.gameOverReason) return null;
   const activeProjectCost = game.projects.filter((project) => project.status !== "completed").reduce((sum, project) => sum + project.budget, 0);
   const causes = [
