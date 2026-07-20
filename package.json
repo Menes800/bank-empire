@@ -1,8 +1,8 @@
 {
   "name": "bank-empire",
   "private": true,
-  "version": "1.0.0-alpha.2",
-  "description": "A browser-first banking management simulation.",
+  "version": "1.0.0-alpha.3",
+  "description": "A browser-first international banking management simulation.",
   "type": "module",
   "scripts": {
     "dev": "vite",
