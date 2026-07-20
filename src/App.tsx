@@ -93,7 +93,7 @@ export default function App() {
       {page === "career" && <CareerPage game={game} action={action} />}
       {page === "holdings" && <HoldingsPage game={game} action={action} />}
 
-      <footer className="game-footer"><span>Autosaved locally · Bank Empire v0.6</span><button onClick={() => { if (window.confirm("Start a new campaign? Your current save will be removed.")) restart(); }}>New campaign</button></footer>
+      <footer className="game-footer"><span>Autosaved locally · Bank Empire v0.6.1</span><button onClick={() => { if (window.confirm("Start a new campaign? Your current save will be removed.")) restart(); }}>New campaign</button></footer>
     </main>
 
     <HelpDrawer open={helpOpen} game={game} onClose={() => setHelpOpen(false)} />
