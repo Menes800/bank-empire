@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { advanceDaysRefined, chooseDecision, createCampaign } from "./game/engine";
+import { advanceDaysPolished, chooseDecision, createCampaign } from "./game/engine";
 import { clearGame, loadGame, saveGame, type GameState } from "./game/store";
 import { DecisionModal, GameOverModal } from "./ui/Modals";
 import { SetupScreen, type SetupDraft } from "./ui/SetupScreen";
@@ -16,6 +16,7 @@ import { ClientsPage } from "./ui/v4/ClientsPage";
 import { LeadershipPage } from "./ui/v4/LeadershipPage";
 import { NetworkPage } from "./ui/v4/NetworkPage";
 import { ReportsPage } from "./ui/v4/ReportsPage";
+import { HelpDrawer } from "./ui/v41/HelpDrawer";
 
 const pages = [
   ["overview", "Overview", "◈"],
@@ -39,6 +40,7 @@ export default function App() {
   const [game, setGame] = useState<GameState>(() => loadGame());
   const [page, setPage] = useState<PageKey>("overview");
   const [dark, setDark] = useState(() => localStorage.getItem("bank-empire-theme") === "dark");
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => saveGame(game), [game]);
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function App() {
   if (!game.setupComplete) return <SetupScreen onStart={(draft: SetupDraft) => setGame(createCampaign(draft))} />;
 
   const action = (fn: (state: GameState) => GameState) => setGame((current) => fn(current));
-  const advance = (days: number) => action((state) => advanceDaysRefined(state, days));
+  const advance = (days: number) => action((state) => advanceDaysPolished(state, days));
   const pageTitle = pages.find(([key]) => key === page)?.[1] ?? "Overview";
   const restart = () => { setGame(clearGame()); setPage("overview"); };
   const navigate = (target: string) => {
@@ -66,10 +68,10 @@ export default function App() {
     </aside>
 
     <main className="main-content">
-      <div className="economy-ticker"><span className={`cycle-chip ${game.economicCycle}`}>{game.economicCycle}</span><span>Policy rate <b>{game.baseRate.toFixed(2)}%</b></span><span>Inflation <b>{game.inflation.toFixed(1)}%</b></span><span>GDP <b>{game.gdpGrowth.toFixed(1)}%</b></span><span>Confidence <b>{game.consumerConfidence.toFixed(0)}</b></span><span className={game.bankRunRisk > 35 ? "ticker-warning" : ""}>Run risk <b>{game.bankRunRisk.toFixed(0)}</b></span></div>
+      <div className="economy-ticker"><span className={`cycle-chip ${game.economicCycle}`}>{game.economicCycle}</span><span title="Central-bank policy rate">Policy rate <b>{game.baseRate.toFixed(2)}%</b></span><span title="Annual inflation in the simulated economy">Inflation <b>{game.inflation.toFixed(1)}%</b></span><span title="Current economic growth">GDP <b>{game.gdpGrowth.toFixed(1)}%</b></span><span title="Higher confidence usually supports demand">Confidence <b>{game.consumerConfidence.toFixed(0)}</b></span><span title="Risk of unusually large customer withdrawals" className={game.bankRunRisk > 35 ? "ticker-warning" : ""}>Run risk <b>{game.bankRunRisk.toFixed(0)}</b></span></div>
       <header className="main-header">
         <div><p className="eyebrow">{game.campaignStage.toUpperCase()} · YEAR {game.year} · Q{game.quarter} · WEEK {game.week} · DAY {game.day}</p><h1>{pageTitle}</h1></div>
-        <div className="header-actions"><button className="icon-button" onClick={() => setDark((value) => !value)}>{dark ? "☀" : "◐"}</button><div className="cash-pill"><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></div><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(30)}>+30 days →</button></div></div>
+        <div className="header-actions"><button className="icon-button help-trigger" title="Explain the game and banking terms" onClick={() => setHelpOpen(true)}>?</button><button className="icon-button" title="Switch light or dark theme" onClick={() => setDark((value) => !value)}>{dark ? "☀" : "◐"}</button><div className="cash-pill" title="Cash available for loans, projects and withdrawals"><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></div><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(30)}>+30 days →</button></div></div>
       </header>
 
       <AdvisorPanel game={game} action={action} onNavigate={navigate} />
@@ -86,9 +88,10 @@ export default function App() {
       {page === "career" && <CareerPage game={game} action={action} />}
       {page === "holdings" && <HoldingsPage game={game} action={action} />}
 
-      <footer className="game-footer"><span>Autosaved locally · Bank Empire v0.4</span><button onClick={() => { if (window.confirm("Start a new campaign? Your current save will be removed.")) restart(); }}>New campaign</button></footer>
+      <footer className="game-footer"><span>Autosaved locally · Bank Empire v0.4.1</span><button onClick={() => { if (window.confirm("Start a new campaign? Your current save will be removed.")) restart(); }}>New campaign</button></footer>
     </main>
 
+    <HelpDrawer open={helpOpen} game={game} onClose={() => setHelpOpen(false)} />
     <DecisionModal game={game} onChoose={(id) => action((state) => chooseDecision(state, id))} />
     <GameOverModal reason={game.gameOverReason} onRestart={restart} />
   </div>;
