@@ -8,6 +8,7 @@ import './v41.css';
 import './v5.css';
 import './v6.css';
 import './v61.css';
+import './v62.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
