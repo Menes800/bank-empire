@@ -7,6 +7,7 @@ import type {
   GameDate,
   GameState,
   InboxItem,
+  LendingPolicy,
   LoanApplication,
 } from './types';
 
@@ -17,15 +18,28 @@ const nextDate = ({ year, month }: GameDate): GameDate =>
   month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
 
 const strategyDemand = (strategy: BankStrategy) => {
-  if (strategy === 'mortgages') return 1.28;
-  if (strategy === 'small-business') return 0.82;
-  if (strategy === 'service') return 1.05;
+  if (strategy === 'mortgages') return 1.24;
+  if (strategy === 'small-business') return 0.84;
+  if (strategy === 'service') return 1.06;
   return 1;
 };
 
 const strategyLoanSize = (strategy: BankStrategy) => {
-  if (strategy === 'small-business') return 1.55;
+  if (strategy === 'small-business') return 1.5;
   if (strategy === 'mortgages') return 1.12;
+  return 1;
+};
+
+const mandateDemand = (branch: Branch) => {
+  if (branch.mandate === 'profit') return 0.82;
+  if (branch.mandate === 'growth') return 1.28;
+  if (branch.mandate === 'service') return 1.08;
+  return 1;
+};
+
+const marketDemand = (branch: Branch) => {
+  if (branch.market === 'business') return 0.78;
+  if (branch.market === 'mixed') return 1.08;
   return 1;
 };
 
@@ -49,46 +63,93 @@ const applicationFor = (
   };
 };
 
-const maybeHireLocally = (branch: Branch, queueSize: number, capacity: number, monthNumber: number) => {
+const maybeHireLocally = (
+  branch: Branch,
+  queueSize: number,
+  capacity: number,
+  monthNumber: number,
+  nextCustomers: number,
+) => {
   const hasManager = branch.employees.some((employee) => employee.role === 'branch-manager');
+  if (!hasManager) return { employees: branch.employees, actions: [] as string[] };
+
   const loanAdvisors = branch.employees.filter((employee) => employee.role === 'lending-advisor');
-  if (!hasManager || queueSize <= capacity * 1.35 || loanAdvisors.length >= 4) {
-    return { employees: branch.employees, action: null as string | null };
+  const customerAdvisors = branch.employees.filter((employee) => employee.role === 'customer-advisor');
+  const queueThreshold = branch.staffingPolicy === 'lean' ? 1.9 : branch.staffingPolicy === 'growth' ? 0.75 : 1.2;
+  const maxLoanAdvisors = branch.staffingPolicy === 'lean' ? 3 : branch.staffingPolicy === 'growth' ? 7 : 5;
+  const customersPerAdvisor = branch.staffingPolicy === 'lean' ? 900 : branch.staffingPolicy === 'growth' ? 520 : 700;
+  const maxCustomerAdvisors = branch.staffingPolicy === 'lean' ? 2 : branch.staffingPolicy === 'growth' ? 4 : 3;
+
+  if (queueSize > Math.max(4, capacity * queueThreshold) && loanAdvisors.length < maxLoanAdvisors) {
+    const newAdvisor: Employee = {
+      id: `${branch.id}-loan-${monthNumber}-${loanAdvisors.length + 1}`,
+      name: employeeName(monthNumber * 5 + queueSize),
+      role: 'lending-advisor',
+      skill: 56 + (monthNumber % 15),
+      morale: 77,
+      monthlySalary: 52_000,
+    };
+    return {
+      employees: [...branch.employees, newAdvisor],
+      actions: [`Filialleder ansatte ${newAdvisor.name} som lånerådgiver for å ta ned køen.`],
+    };
   }
 
-  const newAdvisor: Employee = {
-    id: `${branch.id}-advisor-${monthNumber}-${loanAdvisors.length + 1}`,
-    name: employeeName(monthNumber * 5 + queueSize),
-    role: 'lending-advisor',
-    skill: 56 + (monthNumber % 15),
-    morale: 76,
-    monthlySalary: 52_000,
-  };
+  const servicePressure = nextCustomers / Math.max(1, customerAdvisors.length);
+  if (servicePressure > customersPerAdvisor && customerAdvisors.length < maxCustomerAdvisors) {
+    const newAdvisor: Employee = {
+      id: `${branch.id}-customer-${monthNumber}-${customerAdvisors.length + 1}`,
+      name: employeeName(monthNumber * 7 + nextCustomers),
+      role: 'customer-advisor',
+      skill: 55 + ((monthNumber + nextCustomers) % 16),
+      morale: 79,
+      monthlySalary: 48_000,
+    };
+    return {
+      employees: [...branch.employees, newAdvisor],
+      actions: [`Filialleder ansatte ${newAdvisor.name} som kunderådgiver for å bevare servicenivået.`],
+    };
+  }
 
-  return {
-    employees: [...branch.employees, newAdvisor],
-    action: `Filialleder ansatte ${newAdvisor.name} som lånerådgiver for å ta ned køen.`,
-  };
+  return { employees: branch.employees, actions: [] as string[] };
+};
+
+const approvalThresholdFor = (
+  strategy: BankStrategy,
+  lendingPolicy: LendingPolicy,
+) => {
+  const policyThreshold = lendingPolicy === 'cautious' ? 57 : lendingPolicy === 'growth' ? 74 : 66;
+  if (strategy === 'small-business') return policyThreshold - 3;
+  if (strategy === 'mortgages') return policyThreshold + 2;
+  return policyThreshold;
 };
 
 const simulateBranch = (
   branch: Branch,
   strategy: BankStrategy,
+  lendingPolicy: LendingPolicy,
   date: GameDate,
 ): { branch: Branch; report: BranchMonthReport } => {
   const monthNumber = date.year * 12 + date.month;
   const monthKey = formatMonthKey(date.year, date.month);
   const lendingAdvisors = branch.employees.filter((employee) => employee.role === 'lending-advisor');
   const customerAdvisors = branch.employees.filter((employee) => employee.role === 'customer-advisor');
+  const manager = branch.employees.find((employee) => employee.role === 'branch-manager');
   const averageLendingSkill = lendingAdvisors.length
     ? lendingAdvisors.reduce((sum, employee) => sum + employee.skill, 0) / lendingAdvisors.length
     : 0;
 
-  const marketingLift = Math.min(4.5, branch.localMarketingBudget / 11_000);
-  const reputationLift = branch.reputation / 13;
-  const applicationsReceived = Math.max(
+  const marketingLift = Math.min(7, branch.localMarketingBudget / 10_000);
+  const reputationLift = branch.reputation / 15;
+  const applicationsReceived = clamp(
+    Math.round(
+      (2.4 + marketingLift + reputationLift) *
+      strategyDemand(strategy) *
+      mandateDemand(branch) *
+      marketDemand(branch),
+    ),
     2,
-    Math.round((3.2 + marketingLift + reputationLift) * strategyDemand(strategy)),
+    34,
   );
 
   const newApplications = Array.from({ length: applicationsReceived }, (_, index) =>
@@ -100,50 +161,68 @@ const simulateBranch = (
   }));
   const fullQueue = [...agedQueue, ...newApplications];
 
+  const managerMultiplier = manager ? 0.9 + manager.skill / 500 : 0.8;
   const capacityPerAdvisor = 5 + Math.round(averageLendingSkill / 22);
-  const processingCapacity = Math.max(0, lendingAdvisors.length * capacityPerAdvisor);
+  const processingCapacity = Math.max(0, Math.round(lendingAdvisors.length * capacityPerAdvisor * managerMultiplier));
   const processed = fullQueue.slice(0, processingCapacity);
-  const approvalThreshold = strategy === 'small-business' ? 62 : strategy === 'mortgages' ? 70 : 66;
+  const approvalThreshold = approvalThresholdFor(strategy, lendingPolicy);
   const approved = processed.filter((application) => application.risk <= approvalThreshold);
   const approvedAmount = approved.reduce((sum, application) => sum + application.amount, 0);
   const remainingQueue = fullQueue.slice(processingCapacity);
 
+  const mandateCustomerLift = branch.mandate === 'growth' ? 3 : branch.mandate === 'service' ? 2 : branch.mandate === 'profit' ? -1 : 0;
   const organicCustomers = Math.max(
-    1,
-    Math.round(customerAdvisors.length * 1.5 + branch.reputation / 30 + branch.localMarketingBudget / 28_000),
+    0,
+    Math.round(
+      customerAdvisors.length * 1.7 +
+      branch.reputation / 32 +
+      branch.localMarketingBudget / 26_000 +
+      mandateCustomerLift,
+    ),
   );
-  const newCustomers = approved.length + organicCustomers;
-  const nextCustomers = branch.customers + newCustomers;
+  const queueChurn = remainingQueue.length > 16 ? Math.round((remainingQueue.length - 14) / 3) : 0;
+  const newCustomers = Math.max(0, approved.length + organicCustomers - queueChurn);
+  const nextCustomers = Math.max(0, branch.customers + newCustomers);
   const nextLoanBook = Math.max(0, branch.loanBook * 0.994 + approvedAmount);
-  const nextDeposits = Math.max(0, branch.deposits * 0.998 + newCustomers * 62_000);
+  const nextDeposits = Math.max(0, branch.deposits * 0.998 + newCustomers * 64_000);
 
   const salaryCost = branch.employees.reduce((sum, employee) => sum + employee.monthlySalary, 0);
-  const interestRevenue = nextLoanBook * 0.0042;
-  const depositRevenue = nextDeposits * 0.0007;
-  const serviceRevenue = nextCustomers * 40;
-  const creditLosses = nextLoanBook * (0.00028 + Math.max(0, 58 - branch.reputation) * 0.000006);
+  const interestRevenue = nextLoanBook * 0.00445;
+  const depositRevenue = nextDeposits * 0.00072;
+  const serviceMultiplier = branch.mandate === 'service' ? 1.18 : branch.mandate === 'profit' ? 0.92 : 1;
+  const serviceRevenue = nextCustomers * 43 * serviceMultiplier;
+  const lendingRiskMultiplier = lendingPolicy === 'cautious' ? 0.75 : lendingPolicy === 'growth' ? 1.38 : 1;
+  const creditLosses = nextLoanBook *
+    (0.00025 + Math.max(0, 58 - branch.reputation) * 0.000006) *
+    lendingRiskMultiplier;
   const revenue = roundMoney(interestRevenue + depositRevenue + serviceRevenue);
   const expenses = roundMoney(
     salaryCost + branch.rentMonthly + branch.localMarketingBudget + creditLosses,
   );
   const profit = revenue - expenses;
 
-  const hireResult = maybeHireLocally(branch, remainingQueue.length, processingCapacity, monthNumber);
-  const managerActions: string[] = [];
-  if (hireResult.action) managerActions.push(hireResult.action);
+  const hireResult = maybeHireLocally(branch, remainingQueue.length, processingCapacity, monthNumber, nextCustomers);
+  const managerActions = [...hireResult.actions];
   if (remainingQueue.length === 0 && fullQueue.length > 0) {
     managerActions.push('Teamet behandlet hele lånekøen denne måneden.');
   }
-  const previousReport = branch.reports.at(-1);
-  if (profit > 0 && previousReport && previousReport.profit <= 0) {
+  if (profit > 0 && (branch.reports.at(-1)?.profit ?? -1) <= 0) {
     managerActions.push('Filialen gikk over i månedlig overskudd.');
   }
+  if (remainingQueue.length > 15 && branch.staffingPolicy === 'lean') {
+    managerActions.push('Filialleder varsler at den stramme bemanningsrammen nå gir merkbar ventetid.');
+  }
 
-  const nextReputation = clamp(
-    branch.reputation + (remainingQueue.length > 12 ? -2 : 1) + (strategy === 'service' ? 1 : 0),
-    20,
-    95,
-  );
+  const reputationChange =
+    (remainingQueue.length > 15 ? -2 : remainingQueue.length < 5 ? 1 : 0) +
+    (branch.mandate === 'service' ? 1 : 0) +
+    (queueChurn > 0 ? -1 : 0);
+  const nextReputation = clamp(branch.reputation + reputationChange, 20, 95);
+  const workload = remainingQueue.length / Math.max(1, processingCapacity);
+  const nextEmployees = hireResult.employees.map((employee) => ({
+    ...employee,
+    morale: clamp(employee.morale + (workload > 1.5 ? -2 : workload < 0.5 ? 1 : 0), 35, 95),
+  }));
 
   const report: BranchMonthReport = {
     monthKey,
@@ -165,7 +244,7 @@ const simulateBranch = (
       customers: nextCustomers,
       deposits: roundMoney(nextDeposits),
       loanBook: roundMoney(nextLoanBook),
-      employees: hireResult.employees,
+      employees: nextEmployees,
       loanQueue: remainingQueue,
       reports: [...branch.reports.slice(-11), report],
     },
@@ -188,7 +267,7 @@ const managementReport = (
   return {
     id: `management-${monthKey}`,
     monthKey,
-    kind: totalQueue > 18 || totalProfit < -250_000 ? 'warning' : 'report',
+    kind: totalQueue > 20 || totalProfit < -300_000 ? 'warning' : 'report',
     title: `Ledelsesrapport – ${monthKey}`,
     body: `Banken behandlet ${totalApproved} nye lån og leverte ${totalProfit >= 0 ? 'overskudd' : 'underskudd'} på ${Math.abs(totalProfit).toLocaleString('nb-NO')} kr. Samlet lånekø er ${totalQueue}.${actionSentence}`,
     read: false,
@@ -198,7 +277,9 @@ const managementReport = (
 export const simulateNextMonth = (state: GameState): GameState => {
   const date = nextDate(state.date);
   const monthKey = formatMonthKey(date.year, date.month);
-  const results = state.branches.map((branch) => simulateBranch(branch, state.strategy, date));
+  const results = state.branches.map((branch) =>
+    simulateBranch(branch, state.strategy, state.lendingPolicy, date),
+  );
   const totalProfit = results.reduce((sum, result) => sum + result.report.profit, 0);
 
   return {
@@ -207,6 +288,6 @@ export const simulateNextMonth = (state: GameState): GameState => {
     cash: roundMoney(state.cash + totalProfit),
     equity: roundMoney(state.equity + totalProfit),
     branches: results.map((result) => result.branch),
-    inbox: [managementReport(monthKey, results), ...state.inbox].slice(0, 24),
+    inbox: [managementReport(monthKey, results), ...state.inbox].slice(0, 30),
   };
 };
