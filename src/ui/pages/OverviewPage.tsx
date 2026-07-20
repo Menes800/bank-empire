@@ -1,6 +1,7 @@
+import { getCashFlowSummary } from "../../game/engine";
 import type { GameState } from "../../game/store";
 import { Metric, Progress, Sparkline } from "../common";
-import { cn, money } from "../format";
+import { cn, fullMoney, money } from "../format";
 
 export function OverviewPage({ game, onOpenBoard }: { game: GameState; onOpenBoard: () => void }) {
   const bankValue = game.cash + game.loans - game.deposits - game.wholesaleFunding;
@@ -9,12 +10,27 @@ export function OverviewPage({ game, onOpenBoard }: { game: GameState; onOpenBoa
   const serviceLoad = (game.customers / Math.max(1, capacity)) * 100;
   const completed = game.objectives.filter((item) => item.completed).length;
   const active = game.objectives.filter((item) => !item.completed && !item.failed).length;
+  const flow = getCashFlowSummary(game, 30);
+  const netCashChange = flow.closingCash - flow.openingCash;
+  const outflows = [
+    ["New loans issued", flow.newLending],
+    ["Customer withdrawals", flow.customerWithdrawals],
+    ["Projects and other movements", Math.max(0, -flow.otherMovements)],
+    ["Operating loss", Math.max(0, -flow.operatingProfit)],
+    ["Funding repayment", Math.max(0, -flow.fundingChange)],
+  ] as const;
+  const mainOutflow = [...outflows].sort((a, b) => b[1] - a[1])[0];
+  const cashExplanation = flow.days === 0
+    ? "Advance time to build a cash-movement history. The game will then show exactly why liquid cash changes."
+    : netCashChange < 0
+      ? `${mainOutflow[0]} was the largest drain during the last ${flow.days} days.`
+      : `Cash increased by ${money.format(netCashChange)} during the last ${flow.days} days.`;
 
   return <>
     <section className="hero-dashboard">
       <div>
         <p className="eyebrow light">ESTIMATED BANK VALUE</p>
-        <h2>{money.format(bankValue)}</h2>
+        <h2>{fullMoney.format(bankValue)}</h2>
         <p>Balance growth, customer trust, capital and liquidity. Fast expansion can create profits, but it can also destroy the bank.</p>
         <div className="hero-stats">
           <span><small>Market share</small><strong>{game.marketShare.toFixed(2)}%</strong></span>
@@ -31,6 +47,18 @@ export function OverviewPage({ game, onOpenBoard }: { game: GameState; onOpenBoa
       <Metric label="Loan portfolio" value={money.format(game.loans)} change={`${loanDepositRatio.toFixed(0)}% L/D · ${game.nplRatio.toFixed(2)}% NPL`} tone={game.nplRatio > 5 ? "warn" : "default"} />
       <Metric label="Daily profit" value={money.format(game.profit)} change={`${money.format(game.revenue)} revenue · ${money.format(game.expenses)} cost`} tone={game.profit >= 0 ? "good" : "warn"} />
       <Metric label="Customers" value={game.customers.toLocaleString("en-GB")} change={`${game.satisfaction.toFixed(0)} satisfaction · ${game.reputation.toFixed(0)} reputation`} tone="good" />
+    </section>
+
+    <section className="panel cash-movement-panel" id="cash-movement">
+      <div className="panel-heading">
+        <div><p className="eyebrow">LIQUID CASH EXPLAINED</p><h3>Where the cash went</h3><p>{cashExplanation}</p></div>
+        <div className={netCashChange >= 0 ? "cash-net positive" : "cash-net negative"}><small>Net cash change</small><strong>{flow.days ? money.format(netCashChange) : "No history"}</strong></div>
+      </div>
+      {flow.days === 0 ? <div className="empty-state">Cash movements will appear after the next simulated day.</div> : <div className="cash-flow-grid">
+        <div className="cash-flow-column inflow"><h4>Cash coming in</h4><CashLine label="New deposits" value={flow.depositInflows} /><CashLine label="Loan repayments" value={flow.loanRepayments} /><CashLine label="Operating profit" value={Math.max(0, flow.operatingProfit)} /><CashLine label="New funding" value={Math.max(0, flow.fundingChange)} /></div>
+        <div className="cash-flow-equation"><span><small>Opening cash</small><b>{money.format(flow.openingCash)}</b></span><strong>→</strong><span><small>Closing cash</small><b>{money.format(flow.closingCash)}</b></span></div>
+        <div className="cash-flow-column outflow"><h4>Cash going out</h4><CashLine label="New loans issued" value={flow.newLending} negative /><CashLine label="Customer withdrawals" value={flow.customerWithdrawals} negative /><CashLine label="Projects and other" value={Math.max(0, -flow.otherMovements)} negative /><CashLine label="Operating loss" value={Math.max(0, -flow.operatingProfit)} negative /></div>
+      </div>}
     </section>
 
     <section className="content-grid overview-grid">
@@ -52,4 +80,8 @@ export function OverviewPage({ game, onOpenBoard }: { game: GameState; onOpenBoa
       <article className="panel news-panel"><div className="panel-heading"><div><p className="eyebrow">GROUP NEWS</p><h3>Latest developments</h3></div></div><div className="news-list single">{game.events.slice(0, 5).map((item) => <div className="news-item" key={item.id}><span className={cn("news-dot", item.tone)} /><div><strong>{item.title}</strong><p>{item.body}</p></div><small>Day {item.day}</small></div>)}</div></article>
     </section>
   </>;
+}
+
+function CashLine({ label, value, negative = false }: { label: string; value: number; negative?: boolean }) {
+  return <div><span>{label}</span><strong className={negative ? "negative" : "positive"}>{negative ? "−" : "+"}{money.format(Math.abs(value)).replace("−", "")}</strong></div>;
 }
