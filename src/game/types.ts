@@ -10,10 +10,8 @@ export type ProductKey =
   | "wealth";
 export type EventTone = "positive" | "warning" | "neutral";
 export type LendingPolicy = "conservative" | "balanced" | "aggressive";
-export type EconomicCycle =
-  "boom" | "growth" | "stable" | "slowdown" | "recession";
-export type CompetitorStrategy =
-  "digital" | "premium" | "volume" | "conservative";
+export type EconomicCycle = "boom" | "growth" | "stable" | "slowdown" | "recession";
+export type CompetitorStrategy = "digital" | "premium" | "volume" | "conservative";
 export type ObjectiveMetric =
   | "customers"
   | "profit"
@@ -22,6 +20,28 @@ export type ObjectiveMetric =
   | "liquidityRatio"
   | "compliance"
   | "marketShare";
+
+export type CampaignStage = "startup" | "regional" | "national" | "group" | "empire";
+export type BranchProfile = "retail" | "mortgage" | "business" | "wealth";
+export type ProjectKind =
+  | "branch"
+  | "branch-upgrade"
+  | "head-office"
+  | "mobile-bank"
+  | "core-banking"
+  | "integration";
+export type ProjectStatus = "planned" | "active" | "delayed" | "completed";
+export type ExecutiveRole = "CFO" | "COO" | "CRO" | "CMO" | "CTO";
+export type AutomationMode = "manual" | "conservative" | "balanced" | "growth";
+export type CustomerSegmentKey =
+  | "students"
+  | "young"
+  | "families"
+  | "affluent"
+  | "seniors"
+  | "small-business"
+  | "corporate"
+  | "property";
 
 export type GameEvent = {
   id: string;
@@ -116,6 +136,145 @@ export type LoanApplication = {
   collateral: number;
 };
 
+export type District = {
+  id: string;
+  name: string;
+  description: string;
+  population: number;
+  incomeIndex: number;
+  competition: number;
+  digitalAffinity: number;
+  retailDemand: number;
+  mortgageDemand: number;
+  businessDemand: number;
+  wealthDemand: number;
+  openingCost: number;
+  monthlyRent: number;
+  requiredStage: CampaignStage;
+  mapX: number;
+  mapY: number;
+};
+
+export type BranchOffice = {
+  id: string;
+  districtId: string;
+  name: string;
+  level: 1 | 2 | 3;
+  profile: BranchProfile;
+  capacity: number;
+  staffSlots: number;
+  monthlyRent: number;
+  satisfaction: number;
+  openedDay: number;
+  managerId: string | null;
+};
+
+export type BankProject = {
+  id: string;
+  name: string;
+  kind: ProjectKind;
+  status: ProjectStatus;
+  startDay: number;
+  durationDays: number;
+  remainingDays: number;
+  budget: number;
+  spent: number;
+  risk: number;
+  districtId?: string;
+  branchId?: string;
+  profile?: BranchProfile;
+};
+
+export type EmployeeProfile = {
+  id: string;
+  name: string;
+  role: string;
+  executiveRole: ExecutiveRole | null;
+  salary: number;
+  skill: number;
+  leadership: number;
+  loyalty: number;
+  energy: number;
+  trait: string;
+  assignedBranchId: string | null;
+};
+
+export type AutomationPlan = {
+  treasury: AutomationMode;
+  lending: AutomationMode;
+  marketing: AutomationMode;
+  operations: AutomationMode;
+};
+
+export type CustomerSegment = {
+  key: CustomerSegmentKey;
+  name: string;
+  customers: number;
+  satisfaction: number;
+  loyalty: number;
+  profitability: number;
+  churnRisk: number;
+  preferredChannel: "branch" | "digital" | "advisor";
+};
+
+export type ProductTerms = {
+  key: ProductKey;
+  customerRate: number;
+  monthlyFee: number;
+  approvalThreshold: number;
+  serviceLevel: number;
+  marketingBudget: number;
+};
+
+export type ActiveLoan = {
+  id: string;
+  customerName: string;
+  segment: string;
+  principal: number;
+  outstanding: number;
+  rate: number;
+  riskGrade: "A" | "B" | "C" | "D";
+  collateral: number;
+  status: "performing" | "watch" | "delinquent" | "defaulted" | "restructured";
+  daysPastDue: number;
+  originatedDay: number;
+  nextPaymentDay: number;
+};
+
+export type BoardMember = {
+  id: string;
+  name: string;
+  archetype: string;
+  priority: "growth" | "risk" | "customers" | "profit" | "technology";
+  support: number;
+  influence: number;
+};
+
+export type FinancialReport = {
+  id: string;
+  day: number;
+  year: number;
+  quarter: number;
+  interestIncome: number;
+  feeIncome: number;
+  operatingExpenses: number;
+  creditLosses: number;
+  netIncome: number;
+  assets: number;
+  liabilities: number;
+  equity: number;
+  operatingCashFlow: number;
+  budgetVariance: number;
+};
+
+export type TutorialStep = {
+  id: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  page: string;
+};
+
 export type CampaignInput = {
   founderName: string;
   bankName: string;
@@ -125,7 +284,7 @@ export type CampaignInput = {
 };
 
 export type GameState = {
-  version: 3;
+  version: 4;
   setupComplete: boolean;
   founderName: string;
   background: string;
@@ -191,4 +350,22 @@ export type GameState = {
   achievements: string[];
   events: GameEvent[];
   gameOverReason: string | null;
+
+  campaignStage: CampaignStage;
+  campaignXp: number;
+  strategicFocus: "balanced" | "growth" | "efficiency" | "trust" | "digital";
+  districts: District[];
+  branchOffices: BranchOffice[];
+  projects: BankProject[];
+  employeeRoster: EmployeeProfile[];
+  candidatePool: EmployeeProfile[];
+  automation: AutomationPlan;
+  customerSegments: CustomerSegment[];
+  productTerms: Record<ProductKey, ProductTerms>;
+  activeLoans: ActiveLoan[];
+  boardMembers: BoardMember[];
+  reports: FinancialReport[];
+  tutorialSteps: TutorialStep[];
+  dismissedAdvisorIds: string[];
+  monthlyBudget: number;
 };
