@@ -1,9 +1,34 @@
 import { emptyGame } from "./engine";
-import type { GameState } from "./types";
+import type { EmployeeDepartment, EmployeeProfile, GameState } from "./types";
 
 const STORAGE_KEY = "bank-empire-save-v4";
 const CHECKPOINT_KEY = "bank-empire-checkpoint-v5";
 const LEGACY_KEYS = ["bank-empire-save-v3", "bank-empire-save-v2", "bank-empire-save-v1"];
+
+function inferDepartment(employee: EmployeeProfile): EmployeeDepartment {
+  if (employee.executiveRole) return "Executive";
+  if (employee.department) return employee.department;
+  const value = `${employee.role} ${employee.trait}`.toLowerCase();
+  if (employee.assignedBranchId || value.includes("branch") || value.includes("customer") || value.includes("operations")) return "Branch Operations";
+  if (value.includes("credit") || value.includes("risk") || value.includes("collection")) return "Credit & Collections";
+  if (value.includes("finance") || value.includes("treasury") || value.includes("capital")) return "Finance & Treasury";
+  if (value.includes("marketing") || value.includes("growth") || value.includes("relationship") || value.includes("wealth")) return "Customer Growth";
+  if (value.includes("technology") || value.includes("system") || value.includes("digital") || value.includes("cyber")) return "Technology";
+  return "Branch Operations";
+}
+
+function migrateEmployee(employee: EmployeeProfile): EmployeeProfile {
+  return {
+    ...employee,
+    department: inferDepartment(employee),
+    reportsTo: employee.reportsTo ?? null,
+    performance: employee.performance ?? Math.round(employee.skill * .72 + employee.energy * .28),
+    workload: employee.workload ?? 76,
+    wellbeing: employee.wellbeing ?? employee.energy,
+    potential: employee.potential ?? Math.min(95, employee.skill + 9),
+    tenureMonths: employee.tenureMonths ?? 1,
+  };
+}
 
 export function loadGame(): GameState {
   try {
@@ -18,7 +43,7 @@ export function loadGame(): GameState {
     const migrated: GameState = {
       ...base,
       ...parsed,
-      version: 7,
+      version: 8,
       cash: (parsed.cash ?? base.cash) + legacyCapitalBoost,
       competitors: parsed.competitors ?? base.competitors,
       objectives: parsed.objectives ?? base.objectives,
@@ -30,9 +55,13 @@ export function loadGame(): GameState {
       districts: parsed.districts ?? base.districts,
       branchOffices: (parsed.branchOffices ?? base.branchOffices).map((branch) => ({
         ...branch,
-        managerMandate: branch.managerMandate ?? (branch.managerId ? "guarded" : "manual"),
+        managerMandate: branch.managerMandate ?? (branch.managerId ? "autonomous" : "manual"),
         localFocus: branch.localFocus ?? "service",
-        managerBudget: branch.managerBudget ?? (branch.managerId ? 25_000 : 0),
+        managerBudget: branch.managerBudget ?? (branch.managerId ? 30_000 : 0),
+        managerControl: branch.managerControl ?? Boolean(branch.managerId),
+        operatingPriority: branch.operatingPriority ?? "balanced",
+        upgradeAuthority: branch.upgradeAuthority ?? "profitable",
+        pendingUpgradeRecommendation: branch.pendingUpgradeRecommendation ?? false,
         localCustomers: branch.localCustomers ?? Math.min(branch.capacity, 220 + branch.level * 85),
         localDeposits: branch.localDeposits ?? 0,
         localLoans: branch.localLoans ?? 0,
@@ -40,12 +69,13 @@ export function loadGame(): GameState {
         lastMonthCost: branch.lastMonthCost ?? 0,
         lastMonthProfit: branch.lastMonthProfit ?? 0,
         lifetimeProfit: branch.lifetimeProfit ?? 0,
-        lastManagerAction: branch.lastManagerAction ?? "Awaiting the first v0.7 monthly close.",
+        lastManagerAction: branch.lastManagerAction ?? "Awaiting the next management review.",
       })),
       projects: parsed.projects ?? [],
-      employeeRoster: parsed.employeeRoster ?? base.employeeRoster,
-      candidatePool: parsed.candidatePool ?? base.candidatePool,
+      employeeRoster: (parsed.employeeRoster ?? base.employeeRoster).map(migrateEmployee),
+      candidatePool: (parsed.candidatePool ?? base.candidatePool).map(migrateEmployee),
       automation: { ...base.automation, ...(parsed.automation ?? {}) },
+      managementControl: { ...base.managementControl, ...(parsed.managementControl ?? {}) },
       customerSegments: parsed.customerSegments ?? base.customerSegments,
       productTerms: { ...base.productTerms, ...(parsed.productTerms ?? {}) },
       activeLoans: (parsed.activeLoans ?? []).map((loan) => ({
@@ -68,6 +98,8 @@ export function loadGame(): GameState {
       strategyReviewDay: parsed.strategyReviewDay && parsed.strategyReviewDay > (parsed.day ?? 1) ? parsed.strategyReviewDay : (parsed.day ?? 1) + 90,
       monthlyBudget: parsed.monthlyBudget ?? base.monthlyBudget,
       cashFlowHistory: parsed.cashFlowHistory ?? [],
+      devModeUsed: parsed.devModeUsed ?? false,
+      bankruptcyProtection: parsed.bankruptcyProtection ?? false,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     return migrated;
@@ -92,7 +124,22 @@ export function restoreCheckpoint(): GameState | null {
     const saved = localStorage.getItem(CHECKPOINT_KEY);
     if (!saved) return null;
     const state = JSON.parse(saved) as GameState;
-    const restored: GameState = { ...state, version: 7, collectionCases: state.collectionCases ?? [], ceoInbox: state.ceoInbox ?? [], competitorMoves: state.competitorMoves ?? [], pendingDecision: null, gameOverReason: null, liquidityBreachDays: 0, capitalBreachDays: 0 };
+    const base = emptyGame();
+    const restored: GameState = {
+      ...base,
+      ...state,
+      version: 8,
+      managementControl: { ...base.managementControl, ...(state.managementControl ?? {}) },
+      collectionCases: state.collectionCases ?? [],
+      ceoInbox: state.ceoInbox ?? [],
+      competitorMoves: state.competitorMoves ?? [],
+      devModeUsed: state.devModeUsed ?? false,
+      bankruptcyProtection: state.bankruptcyProtection ?? false,
+      pendingDecision: null,
+      gameOverReason: null,
+      liquidityBreachDays: 0,
+      capitalBreachDays: 0,
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
     return restored;
   } catch {
@@ -112,12 +159,16 @@ export type {
   BrandTheme,
   BranchFocus,
   BranchMandate,
+  BranchPriority,
   BranchProfile,
   CampaignStage,
   Difficulty,
   ExecutiveRole,
   GameState,
   LendingPolicy,
+  ManagementArea,
+  ManagementControlMode,
   ProductKey,
   ProductPreset,
+  UpgradeAuthority,
 } from "./types";
