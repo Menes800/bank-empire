@@ -111,8 +111,8 @@ export default function App() {
   const openDevFromVersion = () => setVersionClicks((count) => { const next = count + 1; if (next >= 5) { setDevOpen(true); return 0; } return next; });
   const compactAttention = page !== "overview" && page !== "inbox";
 
-  return <div className="app app-v8 app-v82" data-brand={game.brandTheme} data-page={page}>
-    <aside className="sidebar sidebar-v8 sidebar-v82">
+  return <div className="app app-v8 app-v82 app-v83" data-brand={game.brandTheme} data-page={page}>
+    <aside className="sidebar sidebar-v8 sidebar-v82 sidebar-v83">
       <div className="logo logo-v7"><span>{bankMark}</span><div><strong>{game.bankName}</strong><small>{game.campaignStage} banking group</small></div></div>
       {game.devModeUsed && <div className="sidebar-dev-save">DEV SAVE</div>}
       <nav className="grouped-navigation">{navigation.map((group) => {
@@ -128,10 +128,10 @@ export default function App() {
       <div className="sidebar-footer"><div className="avatar">{game.founderName.slice(0, 1).toUpperCase()}</div><div><strong>{game.founderName}</strong><small>{careerTitles[game.careerLevel]}</small></div></div>
     </aside>
 
-    <main className={`main-content main-content-v8 main-content-v82 page-${page}`}>
-      <div className="sticky-command-header sticky-command-header-v82">
+    <main className={`main-content main-content-v8 main-content-v82 main-content-v83 page-${page}`}>
+      <div className="sticky-command-header sticky-command-header-v82 sticky-command-header-v83">
         <div className="economy-ticker"><span className={`cycle-chip ${game.economicCycle}`}>{game.economicCycle}</span><span>Policy <b>{game.baseRate.toFixed(2)}%</b></span><span>Inflation <b>{game.inflation.toFixed(1)}%</b></span><span>GDP <b>{game.gdpGrowth.toFixed(1)}%</b></span><span>Confidence <b>{game.consumerConfidence.toFixed(0)}</b></span><span className={game.bankRunRisk > 35 ? "ticker-warning" : ""}>Run risk <b>{game.bankRunRisk.toFixed(0)}</b></span></div>
-        <header className="main-header main-header-v8 main-header-v82">
+        <header className="main-header main-header-v8 main-header-v82 main-header-v83">
           <div className="page-heading-v82"><p className="eyebrow">{game.campaignStage.toUpperCase()} · Y{game.year} Q{game.quarter} · WEEK {game.week} · DAY {game.day}</p><h1>{pageTitle}</h1></div>
           <div className="header-actions"><button className="icon-button help-trigger" onClick={() => setHelpOpen(true)} title="Help">?</button><button className="icon-button" onClick={() => setDark((value) => !value)} title="Theme">{dark ? "☀" : "◐"}</button>{openInbox.length > 0 && <button className={`inbox-header-chip ${criticalInbox > 0 ? "critical" : ""}`} onClick={() => setPage("inbox")}><small>INBOX</small><strong>{openInbox.length}</strong><span>{criticalInbox > 0 ? `${criticalInbox} critical` : "open"}</span></button>}{nearestProject && <button className="nearest-project-chip" onClick={() => setPage("network")}><small>PROJECT</small><strong>{nearestProject.remainingDays} days</strong><span>{nearestProject.name}</span></button>}<button className="cash-pill" onClick={() => setPage("overview")}><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></button><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(30)}>+30 days →</button></div></div>
         </header>
