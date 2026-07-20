@@ -11,10 +11,11 @@ export * from "./v4/gameplay";
 export * from "./v4/advisor";
 export * from "./v41/pacing";
 export * from "./v5/gameplay";
+export * from "./v6/gameplay";
 
 export function emptyGame(): GameState {
   const base: GameState = {
-    version: 4,
+    version: 6,
     setupComplete: false,
     founderName: "",
     background: "Operations",
@@ -82,26 +83,12 @@ export function emptyGame(): GameState {
     gameOverReason: null,
     ...initialV4Fields(),
   };
-  return {
-    ...base,
-    objectives: createObjectives(base, 1),
-    history: [historyPoint(base)],
-  };
+  return { ...base, objectives: createObjectives(base, 1), history: [historyPoint(base)] };
 }
 
 export function createCampaign(input: CampaignInput): GameState {
-  const difficultyCash =
-    input.difficulty === "relaxed"
-      ? 10_000_000
-      : input.difficulty === "hard"
-        ? 6_500_000
-        : 8_000_000;
-  let state: GameState = {
-    ...emptyGame(),
-    ...input,
-    setupComplete: true,
-    cash: difficultyCash,
-  };
+  const difficultyCash = input.difficulty === "relaxed" ? 10_000_000 : input.difficulty === "hard" ? 6_500_000 : 8_000_000;
+  let state: GameState = { ...emptyGame(), ...input, setupComplete: true, cash: difficultyCash };
 
   if (input.background === "Finance") {
     state = {
@@ -125,23 +112,11 @@ export function createCampaign(input: CampaignInput): GameState {
       employees: 10,
       satisfaction: 75,
       employeeRoster: [...state.employeeRoster, {
-        id: "emp-operations", name: "Mina Hauge", role: "Operations coordinator", executiveRole: null, salary: 52_000, skill: 62, leadership: 48, loyalty: 80, energy: 91, trait: "Efficient organiser", assignedBranchId: "branch-harbour-1",
+        id: "emp-operations", name: "Mina Hauge", role: "Operations coordinator", executiveRole: null, salary: 52_000, skill: 62, leadership: 48, loyalty: 80, energy: 91, trait: "Efficient organiser", assignedBranchId: null,
       }],
     };
   }
 
-  state = {
-    ...state,
-    objectives: createObjectives(state, 1),
-    history: [historyPoint(state)],
-  };
-  return addEvent(
-    state,
-    createEvent(
-      1,
-      "positive",
-      "Your bank is open",
-      `${input.bankName} has received its banking licence and welcomed its first customers.`,
-    ),
-  );
+  state = { ...state, objectives: createObjectives(state, 1), history: [historyPoint(state)] };
+  return addEvent(state, createEvent(1, "positive", "Your bank is open", `${input.bankName} has received its banking licence and welcomed its first customers.`));
 }
