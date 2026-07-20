@@ -13,6 +13,14 @@ export const money = {
   },
 };
 
+export const fullMoney = {
+  format(value: number) {
+    const rounded = Math.round(value / 10_000) * 10_000;
+    const sign = rounded < 0 ? "−" : "";
+    return `${sign}$${Math.abs(rounded).toLocaleString("en-GB")}`;
+  },
+};
+
 export const compact = new Intl.NumberFormat("en-GB", {
   notation: "compact",
   maximumFractionDigits: 1,
