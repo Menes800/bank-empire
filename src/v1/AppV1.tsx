@@ -1,14 +1,40 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ROLE_LABELS, STRATEGY_DESCRIPTIONS, STRATEGY_LABELS } from './game/config';
+import {
+  adjustBranchMarketing,
+  advanceMonths,
+  openExpansionBranch,
+  setBankLendingPolicy,
+  setBranchMandate,
+  setBranchStaffingPolicy,
+} from './game/actions';
+import {
+  BRANCH_MANDATE_DESCRIPTIONS,
+  BRANCH_MANDATE_LABELS,
+  EXPANSION_OPPORTUNITIES,
+  LENDING_POLICY_DESCRIPTIONS,
+  LENDING_POLICY_LABELS,
+  ROLE_LABELS,
+  STAFFING_POLICY_DESCRIPTIONS,
+  STAFFING_POLICY_LABELS,
+  STRATEGY_DESCRIPTIONS,
+  STRATEGY_LABELS,
+} from './game/config';
 import { createNewGame } from './game/createGame';
-import { simulateNextMonth } from './game/simulateMonth';
-import type { BankStrategy, Branch, GameState } from './game/types';
+import type {
+  BankStrategy,
+  Branch,
+  BranchMandate,
+  GameState,
+  LendingPolicy,
+  StaffingPolicy,
+} from './game/types';
 import { clearV1Save, loadV1Save, saveV1Game } from './platform/storage';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/app.css';
+import './styles/controls.css';
 
-type Page = 'bank' | 'branches' | 'inbox';
+type Page = 'bank' | 'branches' | 'expansion' | 'inbox';
 
 const money = (value: number) =>
   new Intl.NumberFormat('nb-NO', {
@@ -24,6 +50,12 @@ const monthName = (year: number, month: number) =>
   );
 
 const getLatestReport = (branch: Branch) => branch.reports.at(-1);
+
+const marketLabel = (market: Branch['market']) => {
+  if (market === 'business') return 'Bedriftsmarked';
+  if (market === 'mixed') return 'Blandet marked';
+  return 'Boligmarked';
+};
 
 export default function AppV1() {
   const [game, setGame] = useState<GameState>(() => loadV1Save() ?? createNewGame());
@@ -47,11 +79,21 @@ export default function AppV1() {
 
   const selectedBranch =
     game.branches.find((branch) => branch.id === selectedBranchId) ?? game.branches[0];
+  const selectedReport = selectedBranch ? getLatestReport(selectedBranch) : undefined;
   const unread = game.inbox.filter((item) => !item.read).length;
 
+  const playMonths = (months: number) => setGame((current) => advanceMonths(current, months));
   const setStrategy = (strategy: BankStrategy) => setGame((current) => ({ ...current, strategy }));
+  const setLendingPolicy = (policy: LendingPolicy) =>
+    setGame((current) => setBankLendingPolicy(current, policy));
 
   const openBranch = (branchId: string) => {
+    setSelectedBranchId(branchId);
+    setPage('branches');
+  };
+
+  const handleOpenExpansion = (opportunityId: string, branchId: string) => {
+    setGame((current) => openExpansionBranch(current, opportunityId));
     setSelectedBranchId(branchId);
     setPage('branches');
   };
@@ -83,14 +125,17 @@ export default function AppV1() {
           <button className={page === 'branches' ? 'active' : ''} onClick={() => setPage('branches')}>
             <span>02</span> Filialer
           </button>
+          <button className={page === 'expansion' ? 'active' : ''} onClick={() => setPage('expansion')}>
+            <span>03</span> Ekspansjon
+          </button>
           <button className={page === 'inbox' ? 'active' : ''} onClick={() => setPage('inbox')}>
-            <span>03</span> Innboks {unread > 0 && <b>{unread}</b>}
+            <span>04</span> Innboks {unread > 0 && <b>{unread}</b>}
           </button>
         </nav>
 
         <div className="v1-sidebar-note">
-          <strong>Lokal drift er delegert</strong>
-          <p>Filiallederne behandler lån, bemanner teamet og løser vanlig drift.</p>
+          <strong>Du setter rammene</strong>
+          <p>Filiallederne behandler lån, bemanner teamene og driver markedet innenfor mandatene dine.</p>
         </div>
       </aside>
 
@@ -98,16 +143,26 @@ export default function AppV1() {
         <header className="v1-topbar">
           <div>
             <p className="eyebrow">{monthName(game.date.year, game.date.month)}</p>
-            <h1>{page === 'bank' ? 'Banken' : page === 'branches' ? 'Filialene' : 'CEO-innboks'}</h1>
+            <h1>
+              {page === 'bank'
+                ? 'Banken'
+                : page === 'branches'
+                  ? 'Filialene'
+                  : page === 'expansion'
+                    ? 'Ekspansjon'
+                    : 'CEO-innboks'}
+            </h1>
           </div>
           <div className="v1-top-actions">
             <div className="v1-cash">
               <span>Tilgjengelig kapital</span>
               <strong>{money(game.cash)}</strong>
             </div>
-            <button className="primary" onClick={() => setGame(simulateNextMonth(game))}>
-              Spill neste måned
-            </button>
+            <div className="v1-time-controls" aria-label="Spill frem tid">
+              <button className="secondary" onClick={() => playMonths(3)}>+3 mnd</button>
+              <button className="secondary" onClick={() => playMonths(12)}>+12 mnd</button>
+              <button className="primary" onClick={() => playMonths(1)}>Neste måned</button>
+            </div>
           </div>
         </header>
 
@@ -116,10 +171,10 @@ export default function AppV1() {
             <div className="v1-hero">
               <div>
                 <p className="eyebrow">Din jobb akkurat nå</p>
-                <h2>Sett retning. La lederne drive banken.</h2>
+                <h2>Bestem hvordan banken skal vokse.</h2>
                 <p>
-                  Du bestemmer bankens satsing. Ingrid og filialteamet håndterer kunder,
-                  lånesøknader, bemanning og lokal markedsføring innenfor mandatet sitt.
+                  Du setter strategi, utlånsrammer og retning. De lokale lederne gjør jobben og
+                  kommer tilbake med resultatene.
                 </p>
               </div>
               <div className="v1-status-good">
@@ -145,7 +200,7 @@ export default function AppV1() {
                   <p className="eyebrow">Overordnet strategi</p>
                   <h3>Hva skal banken være kjent for?</h3>
                 </div>
-                <span>Lederne tilpasser den lokale driften</span>
+                <span>Påvirker etterspørselen i alle filialer</span>
               </div>
               <div className="v1-strategy-grid">
                 {(Object.keys(STRATEGY_LABELS) as BankStrategy[]).map((strategy) => (
@@ -164,9 +219,32 @@ export default function AppV1() {
             <section className="v1-panel">
               <div className="v1-panel-heading">
                 <div>
+                  <p className="eyebrow">Kredittfullmakt</p>
+                  <h3>Hvor offensiv skal banken være med lån?</h3>
+                </div>
+                <span>De ansatte behandler sakene innenfor denne rammen</span>
+              </div>
+              <div className="v1-policy-grid">
+                {(Object.keys(LENDING_POLICY_LABELS) as LendingPolicy[]).map((policy) => (
+                  <button
+                    key={policy}
+                    className={game.lendingPolicy === policy ? 'selected' : ''}
+                    onClick={() => setLendingPolicy(policy)}
+                  >
+                    <strong>{LENDING_POLICY_LABELS[policy]}</strong>
+                    <span>{LENDING_POLICY_DESCRIPTIONS[policy]}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="v1-panel">
+              <div className="v1-panel-heading">
+                <div>
                   <p className="eyebrow">Lokale banker</p>
                   <h3>Slik går det ute i filialene</h3>
                 </div>
+                <button className="text-action" onClick={() => setPage('expansion')}>Se nye markeder</button>
               </div>
               <div className="v1-branch-list">
                 {game.branches.map((branch) => {
@@ -176,7 +254,7 @@ export default function AppV1() {
                     <button key={branch.id} onClick={() => openBranch(branch.id)}>
                       <div>
                         <strong>{branch.name}</strong>
-                        <span>{manager?.name ?? 'Ingen filialleder'} · {branch.employees.length} ansatte</span>
+                        <span>{manager?.name ?? 'Ingen filialleder'} · {branch.employees.length} ansatte · {BRANCH_MANDATE_LABELS[branch.mandate]}</span>
                       </div>
                       <div>
                         <span>{branch.loanQueue.length} saker i kø</span>
@@ -208,11 +286,11 @@ export default function AppV1() {
 
             <div className="v1-hero branch-hero">
               <div>
-                <p className="eyebrow">Lokal bank</p>
+                <p className="eyebrow">{marketLabel(selectedBranch.market)}</p>
                 <h2>{selectedBranch.name}</h2>
                 <p>
                   Filialleder {selectedBranch.employees.find((employee) => employee.role === 'branch-manager')?.name}
-                  {' '}har ansvar for daglig drift, lokale ansettelser og kundebehandling.
+                  {' '}driver banken innenfor mandatet og bemanningsrammen du setter.
                 </p>
               </div>
               <div className="v1-status-good">
@@ -222,6 +300,78 @@ export default function AppV1() {
               </div>
             </div>
 
+            <section className="v1-panel">
+              <div className="v1-panel-heading">
+                <div>
+                  <p className="eyebrow">Dine styringsvalg</p>
+                  <h3>Gi filiallederen tydelige rammer</h3>
+                </div>
+                <span>Du styrer retning — lederen tar de lokale valgene</span>
+              </div>
+
+              <div className="v1-control-stack">
+                <div className="v1-control-group">
+                  <div>
+                    <strong>Filialmandat</strong>
+                    <span>Hva skal lederen prioritere de neste månedene?</span>
+                  </div>
+                  <div className="v1-policy-grid compact">
+                    {(Object.keys(BRANCH_MANDATE_LABELS) as BranchMandate[]).map((mandate) => (
+                      <button
+                        key={mandate}
+                        className={selectedBranch.mandate === mandate ? 'selected' : ''}
+                        onClick={() => setGame((current) => setBranchMandate(current, selectedBranch.id, mandate))}
+                      >
+                        <strong>{BRANCH_MANDATE_LABELS[mandate]}</strong>
+                        <span>{BRANCH_MANDATE_DESCRIPTIONS[mandate]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="v1-control-group">
+                  <div>
+                    <strong>Bemanningsfullmakt</strong>
+                    <span>Når kan filialleder ansette uten å spørre deg?</span>
+                  </div>
+                  <div className="v1-policy-grid compact three">
+                    {(Object.keys(STAFFING_POLICY_LABELS) as StaffingPolicy[]).map((policy) => (
+                      <button
+                        key={policy}
+                        className={selectedBranch.staffingPolicy === policy ? 'selected' : ''}
+                        onClick={() => setGame((current) => setBranchStaffingPolicy(current, selectedBranch.id, policy))}
+                      >
+                        <strong>{STAFFING_POLICY_LABELS[policy]}</strong>
+                        <span>{STAFFING_POLICY_DESCRIPTIONS[policy]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="v1-budget-control">
+                  <div>
+                    <strong>Lokalt markedsbudsjett</strong>
+                    <span>Mer budsjett gir flere henvendelser, men kan overbelaste teamet.</span>
+                  </div>
+                  <div className="v1-budget-stepper">
+                    <button
+                      onClick={() => setGame((current) => adjustBranchMarketing(current, selectedBranch.id, -10_000))}
+                      disabled={selectedBranch.localMarketingBudget === 0}
+                    >
+                      − 10k
+                    </button>
+                    <strong>{money(selectedBranch.localMarketingBudget)}<small>/mnd</small></strong>
+                    <button
+                      onClick={() => setGame((current) => adjustBranchMarketing(current, selectedBranch.id, 10_000))}
+                      disabled={selectedBranch.localMarketingBudget >= 120_000}
+                    >
+                      + 10k
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <div className="v1-two-column">
               <section className="v1-panel">
                 <div className="v1-panel-heading"><div><p className="eyebrow">Teamet</p><h3>Menneskene som driver filialen</h3></div></div>
@@ -230,7 +380,7 @@ export default function AppV1() {
                     <article key={employee.id}>
                       <div className="avatar">{employee.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
                       <div><strong>{employee.name}</strong><span>{ROLE_LABELS[employee.role]}</span></div>
-                      <div><small>Kompetanse</small><strong>{employee.skill}</strong></div>
+                      <div><small>Kompetanse / trivsel</small><strong>{employee.skill} / {employee.morale}</strong></div>
                     </article>
                   ))}
                 </div>
@@ -238,21 +388,21 @@ export default function AppV1() {
 
               <section className="v1-panel">
                 <div className="v1-panel-heading"><div><p className="eyebrow">Siste måned</p><h3>Hva skjedde?</h3></div></div>
-                {getLatestReport(selectedBranch) ? (
+                {selectedReport ? (
                   <div className="v1-report-story">
                     <p>
-                      Filialen mottok <strong>{getLatestReport(selectedBranch)?.applicationsReceived}</strong> lånesøknader,
-                      behandlet <strong>{getLatestReport(selectedBranch)?.applicationsProcessed}</strong> og godkjente{' '}
-                      <strong>{getLatestReport(selectedBranch)?.loansApproved}</strong>.
+                      Filialen mottok <strong>{selectedReport.applicationsReceived}</strong> lånesøknader,
+                      behandlet <strong>{selectedReport.applicationsProcessed}</strong> og godkjente{' '}
+                      <strong>{selectedReport.loansApproved}</strong>.
                     </p>
                     <p>
-                      Måneden endte med <strong>{money(getLatestReport(selectedBranch)?.profit ?? 0)}</strong> og{' '}
-                      <strong>{getLatestReport(selectedBranch)?.queueEnd}</strong> saker i kø.
+                      Måneden endte med <strong>{money(selectedReport.profit)}</strong> og{' '}
+                      <strong>{selectedReport.queueEnd}</strong> saker i kø.
                     </p>
-                    {(getLatestReport(selectedBranch)?.managerActions.length ?? 0) > 0 && (
+                    {selectedReport.managerActions.length > 0 && (
                       <div className="manager-actions">
                         <span>Filiallederens handlinger</span>
-                        {getLatestReport(selectedBranch)?.managerActions.map((action) => <p key={action}>{action}</p>)}
+                        {selectedReport.managerActions.map((action) => <p key={action}>{action}</p>)}
                       </div>
                     )}
                   </div>
@@ -262,15 +412,81 @@ export default function AppV1() {
               </section>
             </div>
 
+            {selectedBranch.loanQueue.length > 0 && (
+              <section className="v1-panel">
+                <div className="v1-panel-heading">
+                  <div><p className="eyebrow">Arbeid i filialen</p><h3>Lånekøen akkurat nå</h3></div>
+                  <span>De ansatte behandler dette automatisk neste måned</span>
+                </div>
+                <div className="v1-queue-list">
+                  {selectedBranch.loanQueue.slice(0, 6).map((application) => (
+                    <div key={application.id}>
+                      <span>{application.customerName}</span>
+                      <strong>{money(application.amount)}</strong>
+                      <small>Risiko {application.risk} · ventet {application.waitingMonths} mnd</small>
+                    </div>
+                  ))}
+                  {selectedBranch.loanQueue.length > 6 && <p>+ {selectedBranch.loanQueue.length - 6} flere saker</p>}
+                </div>
+              </section>
+            )}
+
             <section className="v1-panel">
               <div className="v1-panel-heading"><div><p className="eyebrow">Filialøkonomi</p><h3>Enkel først, detaljer når du trenger dem</h3></div></div>
               <div className="v1-metrics branch-metrics">
                 <article><span>Kunder</span><strong>{selectedBranch.customers.toLocaleString('nb-NO')}</strong></article>
                 <article><span>Innskudd</span><strong>{money(selectedBranch.deposits)}</strong></article>
                 <article><span>Utlån</span><strong>{money(selectedBranch.loanBook)}</strong></article>
-                <article><span>Lokal markedsføring</span><strong>{money(selectedBranch.localMarketingBudget)}/mnd</strong></article>
+                <article className={selectedReport && selectedReport.profit < 0 ? 'negative' : 'positive'}>
+                  <span>Månedsresultat</span><strong>{selectedReport ? money(selectedReport.profit) : 'Ikke kjørt'}</strong>
+                </article>
               </div>
             </section>
+          </section>
+        )}
+
+        {page === 'expansion' && (
+          <section className="v1-page">
+            <div className="v1-hero">
+              <div>
+                <p className="eyebrow">Bygg banknettverket</p>
+                <h2>Velg neste lokale marked.</h2>
+                <p>
+                  En ny filial åpner med eget team og lokal leder. Den trenger tid til å bygge
+                  omdømme og kan gå i minus de første månedene.
+                </p>
+              </div>
+              <div className="v1-status-good">
+                <span>Ekspansjonskapital</span>
+                <strong>{money(game.cash)}</strong>
+                <small>{EXPANSION_OPPORTUNITIES.filter((option) => !game.branches.some((branch) => branch.id === option.branchId)).length} markeder tilgjengelig</small>
+              </div>
+            </div>
+
+            <div className="v1-expansion-grid">
+              {EXPANSION_OPPORTUNITIES.map((opportunity) => {
+                const owned = game.branches.some((branch) => branch.id === opportunity.branchId);
+                const canAfford = game.cash >= opportunity.openingCost;
+                return (
+                  <article key={opportunity.id} className={`v1-expansion-card ${owned ? 'owned' : ''}`}>
+                    <div className="v1-tag">{opportunity.strength}</div>
+                    <h3>{opportunity.name}</h3>
+                    <p>{opportunity.description}</p>
+                    <div className="v1-expansion-facts">
+                      <span>{marketLabel(opportunity.market)}</span>
+                      <strong>{money(opportunity.openingCost)}</strong>
+                    </div>
+                    <button
+                      className="primary"
+                      disabled={owned || !canAfford}
+                      onClick={() => handleOpenExpansion(opportunity.id, opportunity.branchId)}
+                    >
+                      {owned ? 'Allerede åpnet' : canAfford ? 'Åpne filial' : 'Ikke nok kapital'}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
           </section>
         )}
 
@@ -288,10 +504,13 @@ export default function AppV1() {
                 <button
                   key={item.id}
                   className={`${item.kind} ${item.read ? 'read' : ''}`}
-                  onClick={() => setGame((current) => ({
-                    ...current,
-                    inbox: current.inbox.map((entry) => entry.id === item.id ? { ...entry, read: true } : entry),
-                  }))}
+                  onClick={() => {
+                    setGame((current) => ({
+                      ...current,
+                      inbox: current.inbox.map((entry) => entry.id === item.id ? { ...entry, read: true } : entry),
+                    }));
+                    if (item.branchId) openBranch(item.branchId);
+                  }}
                 >
                   <span className="inbox-type">{item.kind === 'warning' ? 'Trenger oppmerksomhet' : 'Ledelsesrapport'}</span>
                   <strong>{item.title}</strong>
