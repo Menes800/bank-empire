@@ -11,15 +11,37 @@ const categoryCopy: Record<CEOInboxTask["category"], { label: string; icon: stri
   project: { label: "Projects", icon: "D" },
 };
 
+function canDelegateTask(game: GameState, task: CEOInboxTask) {
+  if (task.decision) return false;
+  const owner = task.ownerRole
+    ? game.employeeRoster.find((employee) => employee.executiveRole === task.ownerRole)
+    : undefined;
+  const branchDelegate =
+    task.category === "network" &&
+    game.branchOffices.some((branch) => branch.managerId && branch.managerMandate !== "manual");
+  return Boolean(owner || branchDelegate);
+}
+
 export function InboxPage({ game, action, onNavigate }: { game: GameState; action: GameAction; onNavigate: (page: string) => void }) {
   const open = game.ceoInbox.filter((task) => task.status === "open");
   const completed = game.ceoInbox.filter((task) => task.status !== "open").slice(0, 8);
   const critical = open.filter((task) => task.urgency === "critical").length;
   const important = open.filter((task) => task.urgency === "important").length;
+  const delegable = open.filter((task) => canDelegateTask(game, task));
+
+  const delegateRoutineMatters = () => {
+    const taskIds = delegable.map((task) => task.id);
+    action((state) => taskIds.reduce((current, taskId) => delegateInboxTask(current, taskId), state));
+  };
 
   return <>
     <section className="inbox-command-card">
-      <div><p className="eyebrow light">CEO OPERATING DESK</p><h2>{open.length === 0 ? "The organisation is under control" : `${open.length} matters need ownership`}</h2><p>Routine work belongs with managers. Strategic, high-value and high-risk matters stay visible here until they are resolved or delegated.</p></div>
+      <div>
+        <p className="eyebrow light">CEO OPERATING DESK</p>
+        <h2>{open.length === 0 ? "The organisation is under control" : `${open.length} matters need ownership`}</h2>
+        <p>Routine work belongs with managers. Strategic, high-value and high-risk matters stay visible here until they are resolved or delegated.</p>
+        {delegable.length > 0 && <button className="secondary small inbox-delegate-all" onClick={delegateRoutineMatters}>Delegate {delegable.length} routine {delegable.length === 1 ? "matter" : "matters"}</button>}
+      </div>
       <div className="inbox-command-stats"><span><small>Critical</small><strong>{critical}</strong></span><span><small>Important</small><strong>{important}</strong></span><span><small>Delegated or closed</small><strong>{game.ceoInbox.filter((task) => task.status !== "open").length}</strong></span></div>
     </section>
 
@@ -48,8 +70,7 @@ export function InboxPage({ game, action, onNavigate }: { game: GameState; actio
 
 function TaskCard({ task, game, action, onNavigate }: { task: CEOInboxTask; game: GameState; action: GameAction; onNavigate: (page: string) => void }) {
   const owner = task.ownerRole ? game.employeeRoster.find((employee) => employee.executiveRole === task.ownerRole) : undefined;
-  const branchDelegate = task.category === "network" && game.branchOffices.some((branch) => branch.managerId && branch.managerMandate !== "manual");
-  const canDelegate = Boolean(owner || branchDelegate);
+  const canDelegate = canDelegateTask(game, task);
   return <article className={`ceo-task-card urgency-${task.urgency}`}>
     <div className="ceo-task-heading"><span>{categoryCopy[task.category].icon}</span><div><small>{categoryCopy[task.category].label} · Day {task.createdDay}</small><strong>{task.title}</strong><p>{task.summary}</p></div><b>{task.urgency}</b></div>
     {task.decision ? <div className="inbox-decision-options">{task.decision.choices.map((choice) => <button key={choice.id} onClick={() => action((state) => resolveInboxDecision(state, task.id, choice.id))}><strong>{choice.label}</strong><small>{choice.description}</small></button>)}</div> : <div className="ceo-task-actions"><button className="secondary small" onClick={() => onNavigate(task.page)}>Open workspace</button><button className="secondary small" disabled={!canDelegate} title={canDelegate ? `Delegate to ${owner?.name ?? "branch management"}` : `Appoint ${task.ownerRole ?? "a responsible manager"} first`} onClick={() => action((state) => delegateInboxTask(state, task.id))}>Delegate{owner ? ` to ${owner.name}` : ""}</button><button className="text-button" onClick={() => action((state) => resolveInboxTask(state, task.id))}>Mark reviewed</button></div>}
