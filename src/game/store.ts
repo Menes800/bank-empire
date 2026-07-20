@@ -18,7 +18,7 @@ export function loadGame(): GameState {
     const migrated: GameState = {
       ...base,
       ...parsed,
-      version: 4,
+      version: 6,
       cash: (parsed.cash ?? base.cash) + legacyCapitalBoost,
       competitors: parsed.competitors ?? base.competitors,
       objectives: parsed.objectives ?? base.objectives,
@@ -28,7 +28,12 @@ export function loadGame(): GameState {
       pendingDecision: parsed.pendingDecision ?? null,
       gameOverReason: parsed.gameOverReason ?? null,
       districts: parsed.districts ?? base.districts,
-      branchOffices: parsed.branchOffices ?? base.branchOffices,
+      branchOffices: (parsed.branchOffices ?? base.branchOffices).map((branch) => ({
+        ...branch,
+        managerMandate: branch.managerMandate ?? (branch.managerId ? "guarded" : "manual"),
+        localFocus: branch.localFocus ?? "service",
+        managerBudget: branch.managerBudget ?? (branch.managerId ? 25_000 : 0),
+      })),
       projects: parsed.projects ?? [],
       employeeRoster: parsed.employeeRoster ?? base.employeeRoster,
       candidatePool: parsed.candidatePool ?? base.candidatePool,
@@ -43,7 +48,9 @@ export function loadGame(): GameState {
       campaignStage: parsed.campaignStage ?? base.campaignStage,
       campaignXp: parsed.campaignXp ?? 0,
       strategicFocus: parsed.strategicFocus ?? "balanced",
+      strategyReviewDay: parsed.strategyReviewDay && parsed.strategyReviewDay > (parsed.day ?? 1) ? parsed.strategyReviewDay : (parsed.day ?? 1) + 90,
       monthlyBudget: parsed.monthlyBudget ?? base.monthlyBudget,
+      cashFlowHistory: parsed.cashFlowHistory ?? [],
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     return migrated;
@@ -68,7 +75,7 @@ export function restoreCheckpoint(): GameState | null {
     const saved = localStorage.getItem(CHECKPOINT_KEY);
     if (!saved) return null;
     const state = JSON.parse(saved) as GameState;
-    const restored = { ...state, pendingDecision: null, gameOverReason: null, liquidityBreachDays: 0, capitalBreachDays: 0 };
+    const restored = { ...state, version: 6 as const, pendingDecision: null, gameOverReason: null, liquidityBreachDays: 0, capitalBreachDays: 0 };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
     return restored;
   } catch {
@@ -86,6 +93,8 @@ export function clearGame(): GameState {
 export type {
   AutomationMode,
   BrandTheme,
+  BranchFocus,
+  BranchMandate,
   BranchProfile,
   CampaignStage,
   Difficulty,
@@ -93,4 +102,5 @@ export type {
   GameState,
   LendingPolicy,
   ProductKey,
+  ProductPreset,
 } from "./types";
