@@ -10,6 +10,7 @@ import './v6.css';
 import './v61.css';
 import './v62.css';
 import './v7.css';
+import './v70.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
