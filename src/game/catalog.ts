@@ -56,73 +56,61 @@ export const PRODUCT_CATALOG: Record<
 export const DECISIONS: DecisionEvent[] = [
   {
     id: "complaint-wave",
-    title: "A wave of customer complaints",
+    title: "Service pressure is becoming visible",
     description:
-      "Customers are reporting long response times after a rapid period of growth. The press has started asking questions.",
+      "Response times are rising after a period of growth. Management needs a clear service strategy, not another temporary patch.",
     category: "customer",
     choices: [
       {
-        id: "hire-temp",
-        label: "Bring in temporary support",
+        id: "reassign-teams",
+        label: "Reassign teams for 30 days",
         description:
-          "Costs NOK 240k, but protects satisfaction and reputation.",
-        effect: {
-          cash: -240_000,
-          employees: 3,
-          satisfaction: 6,
-          reputation: 2,
-        },
+          "Move capacity from sales to service. Customer experience improves, but growth slows temporarily.",
+        effect: { satisfaction: 4, brandStrength: -1, boardConfidence: 1 },
       },
       {
-        id: "digital-queue",
-        label: "Push customers to digital service",
+        id: "service-recovery",
+        label: "Launch a focused recovery programme",
         description:
-          "Cheaper, but less personal. Works best with a strong app.",
-        effect: {
-          cash: -80_000,
-          digitalLevel: 4,
-          satisfaction: -2,
-          brandStrength: 2,
-        },
+          "A limited NOK 90k programme improves training, queue management and communication.",
+        effect: { cash: -90_000, satisfaction: 7, reputation: 2 },
       },
       {
-        id: "wait-it-out",
-        label: "Wait for the pressure to pass",
+        id: "priority-service",
+        label: "Prioritise key customer segments",
         description:
-          "No immediate cost, but the customer impact may be severe.",
-        effect: { satisfaction: -8, reputation: -4, boardConfidence: -3 },
+          "Protect the most profitable relationships while accepting weaker service elsewhere.",
+        effect: { satisfaction: -3, brandStrength: 2, boardConfidence: 1 },
       },
     ],
   },
   {
     id: "regulator-review",
-    title: "The regulator requests a thematic review",
+    title: "Regulatory controls need attention",
     description:
-      "Your growth has attracted attention. The regulator wants documentation of customer due diligence and credit controls.",
+      "Growth has exposed gaps in documentation and monitoring. The board wants a proportionate remediation plan.",
     category: "regulatory",
     choices: [
       {
-        id: "full-review",
-        label: "Run a full independent review",
-        description: "Expensive, but significantly strengthens compliance.",
-        effect: {
-          cash: -420_000,
-          compliance: 12,
-          reputation: 2,
-          boardConfidence: 3,
-        },
+        id: "independent-review",
+        label: "Commission an independent review",
+        description:
+          "NOK 180k buys a fast and credible control review with a strong long-term effect.",
+        effect: { cash: -180_000, compliance: 11, reputation: 2, boardConfidence: 3 },
       },
       {
-        id: "internal-review",
-        label: "Handle it internally",
-        description: "Lower cost with a moderate control improvement.",
-        effect: { cash: -140_000, compliance: 5, boardConfidence: 1 },
+        id: "phased-remediation",
+        label: "Run phased internal remediation",
+        description:
+          "Use existing teams and a small specialist budget. Progress is slower, but affordable.",
+        effect: { cash: -60_000, compliance: 6, boardConfidence: 1 },
       },
       {
-        id: "minimum-response",
-        label: "Submit the minimum required",
-        description: "Preserves cash, but increases future regulatory risk.",
-        effect: { compliance: -8, reputation: -2, boardConfidence: -5 },
+        id: "defer-controls",
+        label: "Submit a plan and defer the work",
+        description:
+          "Preserves cash now, but leaves the bank more exposed to future supervisory action.",
+        effect: { compliance: -5, reputation: -2, boardConfidence: -4 },
       },
     ],
   },
@@ -130,90 +118,89 @@ export const DECISIONS: DecisionEvent[] = [
     id: "cyber-incident",
     title: "Suspicious activity in online banking",
     description:
-      "The security team has identified abnormal login attempts. No customer losses have been confirmed yet.",
+      "Security monitoring has identified abnormal login attempts. No confirmed customer loss has occurred yet.",
     category: "technology",
     choices: [
       {
-        id: "shutdown",
-        label: "Temporarily shut down online banking",
-        description: "Safest option, but customers will be frustrated.",
-        effect: {
-          cash: -180_000,
-          cyberSecurity: 10,
-          satisfaction: -4,
-          compliance: 3,
-        },
+        id: "isolate-investigate",
+        label: "Isolate systems and investigate",
+        description:
+          "A controlled NOK 120k response reduces risk substantially, with a short service interruption.",
+        effect: { cash: -120_000, cyberSecurity: 10, satisfaction: -2, compliance: 3 },
       },
       {
-        id: "silent-patch",
-        label: "Patch quietly overnight",
-        description: "Balanced response with some residual risk.",
-        effect: { cash: -90_000, cyberSecurity: 5, fraudLosses: 25_000 },
+        id: "overnight-patch",
+        label: "Deploy a controlled overnight patch",
+        description:
+          "A balanced NOK 45k response with some residual exposure.",
+        effect: { cash: -45_000, cyberSecurity: 6, fraudLosses: 15_000 },
       },
       {
-        id: "monitor",
-        label: "Continue monitoring",
-        description: "No immediate disruption, but losses could rise.",
-        effect: { cyberSecurity: -5, fraudLosses: 160_000, reputation: -3 },
+        id: "accept-monitor",
+        label: "Accept the risk and monitor",
+        description:
+          "No project cost, but the bank carries greater operational and fraud exposure.",
+        effect: { cyberSecurity: -4, fraudLosses: 100_000, reputation: -2 },
       },
     ],
   },
   {
     id: "star-manager",
-    title: "A competitor approaches your star branch manager",
+    title: "A key manager is considering another offer",
     description:
-      "One of your best leaders has received an attractive offer and asks for a retention package.",
+      "A competitor has approached one of the bank's strongest operators. The issue is career structure as much as salary.",
     category: "people",
     choices: [
       {
-        id: "retain",
-        label: "Match the offer",
-        description: "Keep the manager and signal that talent is valued.",
-        effect: { cash: -190_000, satisfaction: 2, boardConfidence: 2 },
+        id: "career-package",
+        label: "Offer a career and retention package",
+        description:
+          "A targeted NOK 60k package protects continuity and signals a stronger leadership culture.",
+        effect: { cash: -60_000, satisfaction: 2, boardConfidence: 2 },
       },
       {
-        id: "promote",
-        label: "Offer a group role",
-        description: "More responsibility and a smaller cash package.",
-        effect: {
-          cash: -95_000,
-          employees: 1,
-          brandStrength: 2,
-          boardConfidence: 1,
-        },
+        id: "broaden-role",
+        label: "Broaden the manager's mandate",
+        description:
+          "Offer more responsibility instead of a large cash payment.",
+        effect: { brandStrength: 2, boardConfidence: 1 },
       },
       {
-        id: "let-go",
-        label: "Let the manager leave",
-        description: "Protects costs, but capacity and morale suffer.",
-        effect: { employees: -1, satisfaction: -3, reputation: -1 },
+        id: "build-bench",
+        label: "Let the manager leave and build the bench",
+        description:
+          "Accept short-term disruption to avoid dependence on one individual.",
+        effect: { employees: -1, satisfaction: -2, reputation: -1, boardConfidence: 1 },
       },
     ],
   },
   {
     id: "rate-war",
-    title: "A competitor starts a deposit rate war",
+    title: "A competitor is targeting your deposit customers",
     description:
-      "A digital challenger has raised savings rates aggressively and is targeting your customers.",
+      "A digital challenger has launched an aggressive savings campaign. Choose whether to defend price, relationships or margin.",
     category: "market",
     choices: [
       {
-        id: "match",
-        label: "Match the campaign",
-        description: "Protect deposits, but compress the interest margin.",
-        effect: { deposits: 650_000, cash: 480_000, brandStrength: 2 },
+        id: "targeted-pricing",
+        label: "Use targeted retention pricing",
+        description:
+          "Spend NOK 75k on selected customers rather than repricing the entire deposit book.",
+        effect: { cash: -75_000, deposits: 420_000, satisfaction: 3 },
       },
       {
-        id: "loyalty",
-        label: "Launch a loyalty bonus",
-        description: "Target existing customers instead of changing all rates.",
-        effect: { cash: -210_000, satisfaction: 5, reputation: 2 },
+        id: "service-defence",
+        label: "Compete on service and trust",
+        description:
+          "Protect the brand and accept modest deposit leakage instead of starting a price war.",
+        effect: { deposits: -140_000, brandStrength: 4, reputation: 2 },
       },
       {
-        id: "hold-price",
-        label: "Hold your pricing",
-        description: "Defend margins and accept some customer losses.",
-        effect: { deposits: -520_000, customers: -28, boardConfidence: -1 },
+        id: "broad-match",
+        label: "Match the campaign broadly",
+        description:
+          "A larger NOK 110k campaign protects volume, but management accepts lower near-term margin.",
+        effect: { cash: -110_000, deposits: 720_000, brandStrength: 2 },
       },
     ],
   },
