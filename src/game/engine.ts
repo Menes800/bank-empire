@@ -1,8 +1,9 @@
 import { initialCompetitors } from "./catalog";
 import { createObjectives } from "./objectives";
-import type { CampaignInput, GameState } from "./types";
+import type { CampaignInput, EmployeeProfile, GameState } from "./types";
 import { addEvent, createEvent, historyPoint } from "./utils";
 import { initialV4Fields } from "./v4/catalog";
+import { employeeDepartment } from "./v8/gameplay";
 
 export { PRODUCT_CATALOG } from "./catalog";
 export * from "./simulation";
@@ -13,10 +14,25 @@ export * from "./v41/pacing";
 export * from "./v5/gameplay";
 export * from "./v6/gameplay";
 export * from "./v7/gameplay";
+export * from "./v8/gameplay";
+
+function enrichEmployee(employee: EmployeeProfile): EmployeeProfile {
+  return {
+    ...employee,
+    department: employee.department ?? employeeDepartment(employee),
+    reportsTo: employee.reportsTo ?? null,
+    performance: employee.performance ?? Math.round(employee.skill * .72 + employee.energy * .28),
+    workload: employee.workload ?? 76,
+    wellbeing: employee.wellbeing ?? employee.energy,
+    potential: employee.potential ?? Math.min(95, employee.skill + 9),
+    tenureMonths: employee.tenureMonths ?? 1,
+  };
+}
 
 export function emptyGame(): GameState {
+  const v4 = initialV4Fields();
   const base: GameState = {
-    version: 7,
+    version: 8,
     setupComplete: false,
     founderName: "",
     background: "Operations",
@@ -82,17 +98,23 @@ export function emptyGame(): GameState {
     achievements: [],
     events: [],
     gameOverReason: null,
-    ...initialV4Fields(),
+    ...v4,
+    branchOffices: v4.branchOffices.map((branch) => ({ ...branch, managerControl: true, operatingPriority: "balanced", upgradeAuthority: "profitable", pendingUpgradeRecommendation: false })),
+    employeeRoster: v4.employeeRoster.map(enrichEmployee),
+    candidatePool: v4.candidatePool.map(enrichEmployee),
     collectionCases: [],
     ceoInbox: [],
     competitorMoves: [],
+    managementControl: { treasury: "major", lending: "major", marketing: "major", operations: "automatic" },
+    devModeUsed: false,
+    bankruptcyProtection: false,
   };
   return { ...base, objectives: createObjectives(base, 1), history: [historyPoint(base)] };
 }
 
 export function createCampaign(input: CampaignInput): GameState {
   const difficultyCash = input.difficulty === "relaxed" ? 10_000_000 : input.difficulty === "hard" ? 6_500_000 : 8_000_000;
-  let state: GameState = { ...emptyGame(), ...input, setupComplete: true, cash: difficultyCash, version: 7 };
+  let state: GameState = { ...emptyGame(), ...input, setupComplete: true, cash: difficultyCash, version: 8 };
 
   if (input.background === "Finance") {
     state = {
@@ -100,7 +122,7 @@ export function createCampaign(input: CampaignInput): GameState {
       compliance: 82,
       loanLossReserve: 340_000,
       capitalRatio: 16.2,
-      employeeRoster: state.employeeRoster.map((employee) => employee.role === "Credit analyst" ? { ...employee, skill: employee.skill + 5 } : employee),
+      employeeRoster: state.employeeRoster.map((employee) => employee.role === "Credit analyst" ? { ...employee, skill: employee.skill + 5, department: "Credit & Collections" } : employee),
     };
   } else if (input.background === "Sales") {
     state = {
@@ -111,14 +133,21 @@ export function createCampaign(input: CampaignInput): GameState {
       customerSegments: state.customerSegments.map((segment) => ({ ...segment, customers: Math.round(segment.customers * 1.12) })),
     };
   } else {
-    state = {
-      ...state,
-      employees: 10,
-      satisfaction: 75,
-      employeeRoster: [...state.employeeRoster, {
-        id: "emp-operations", name: "Mina Hauge", role: "Operations coordinator", executiveRole: null, salary: 52_000, skill: 62, leadership: 48, loyalty: 80, energy: 91, trait: "Efficient organiser", assignedBranchId: null,
-      }],
-    };
+    const operationsEmployee = enrichEmployee({
+      id: "emp-operations",
+      name: "Mina Hauge",
+      role: "Operations coordinator",
+      executiveRole: null,
+      salary: 52_000,
+      skill: 62,
+      leadership: 48,
+      loyalty: 80,
+      energy: 91,
+      trait: "Efficient organiser",
+      assignedBranchId: null,
+      department: "Branch Operations",
+    });
+    state = { ...state, employees: 10, satisfaction: 75, employeeRoster: [...state.employeeRoster, operationsEmployee] };
   }
 
   state = { ...state, objectives: createObjectives(state, 1), history: [historyPoint(state)] };
