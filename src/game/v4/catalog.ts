@@ -96,17 +96,18 @@ export function initialTutorial(): TutorialStep[] {
 
 export function initialV4Fields() {
   const firstBranch: BranchOffice = {
-    id: "branch-harbour-1", districtId: "harbour", name: "Harbour Branch", level: 1, profile: "retail", capacity: 520, staffSlots: 7, monthlyRent: 56_000, satisfaction: 75, openedDay: 1, managerId: "emp-anna",
+    id: "branch-harbour-1", districtId: "harbour", name: "Harbour Branch", level: 1, profile: "retail", capacity: 520, staffSlots: 7, monthlyRent: 56_000, satisfaction: 75, openedDay: 1, managerId: "emp-anna", managerMandate: "guarded", localFocus: "service", managerBudget: 25_000,
   };
   const automation: AutomationPlan = { treasury: "manual", lending: "manual", marketing: "manual", operations: "manual" };
   return {
     campaignStage: "startup" as const,
     campaignXp: 0,
     strategicFocus: "balanced" as const,
+    strategyReviewDay: 91,
     districts: DISTRICTS.map((district) => ({ ...district })),
     branchOffices: [firstBranch],
     projects: [],
-    employeeRoster: initialEmployees(),
+    employeeRoster: initialEmployees().map((person) => person.id === "emp-anna" ? { ...person, assignedBranchId: firstBranch.id } : person),
     candidatePool: initialCandidates(),
     automation,
     customerSegments: initialSegments(),
@@ -117,5 +118,6 @@ export function initialV4Fields() {
     tutorialSteps: initialTutorial(),
     dismissedAdvisorIds: [],
     monthlyBudget: 1_250_000,
+    cashFlowHistory: [],
   };
 }
