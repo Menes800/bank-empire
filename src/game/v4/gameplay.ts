@@ -5,7 +5,6 @@ import type {
   BankProject,
   BranchProfile,
   CampaignStage,
-  EmployeeProfile,
   ExecutiveRole,
   FinancialReport,
   GameState,
@@ -49,11 +48,10 @@ function completeProject(state: GameState, project: BankProject): GameState {
   if (project.kind === "branch" && project.districtId && project.profile) {
     const district = state.districts.find((item) => item.id === project.districtId);
     if (district) {
-      const branchId = `branch-${district.id}-${state.day}`;
       next = {
         ...next,
         branchOffices: [...next.branchOffices, {
-          id: branchId,
+          id: `branch-${district.id}-${state.day}`,
           districtId: district.id,
           name: `${district.name} Branch`,
           level: 1,
@@ -101,12 +99,13 @@ function advanceProjects(state: GameState): GameState {
   let next = state;
   const projects = state.projects.map((project) => {
     if (project.status === "completed") return project;
-    const executive = state.employeeRoster.find((employee) => employee.executiveRole === (project.kind === "mobile-bank" || project.kind === "core-banking" ? "CTO" : "COO"));
+    const expectedRole: ExecutiveRole = project.kind === "mobile-bank" || project.kind === "core-banking" ? "CTO" : "COO";
+    const executive = state.employeeRoster.find((employee) => employee.executiveRole === expectedRole);
     const leadershipBonus = executive ? Math.max(0, executive.leadership - 60) / 120 : 0;
     const delayChance = Math.max(0.003, project.risk / 2200 - leadershipBonus / 100);
     const delayed = Math.random() < delayChance;
     const remainingDays = Math.max(0, project.remainingDays - (delayed ? 0 : 1));
-    const status = delayed ? "delayed" : remainingDays === 0 ? "completed" : "active";
+    const status: BankProject["status"] = delayed ? "delayed" : remainingDays === 0 ? "completed" : "active";
     const updated: BankProject = { ...project, remainingDays, status, spent: Math.min(project.budget, project.spent + project.budget / Math.max(1, project.durationDays)) };
     if (remainingDays === 0) next = completeProject(next, updated);
     return updated;
@@ -152,11 +151,11 @@ function applyAutomation(state: GameState): GameState {
 function updateActiveLoans(state: GameState): GameState {
   let cashDelta = 0;
   let losses = 0;
-  const activeLoans = state.activeLoans.map((loan) => {
+  const activeLoans: ActiveLoan[] = state.activeLoans.map((loan) => {
     if (loan.status === "defaulted") return loan;
     const macroStress = state.economicCycle === "recession" ? 1.8 : state.economicCycle === "slowdown" ? 1.25 : 0.85;
     const riskBase = { A: 0.00004, B: 0.0001, C: 0.00023, D: 0.00055 }[loan.riskGrade] * macroStress;
-    let status = loan.status;
+    let status: ActiveLoan["status"] = loan.status;
     let daysPastDue = loan.daysPastDue;
     if (Math.random() < riskBase) {
       daysPastDue += 30;
@@ -173,7 +172,7 @@ function updateActiveLoans(state: GameState): GameState {
       if (daysPastDue > 0 && Math.random() > 0.55) daysPastDue = Math.max(0, daysPastDue - 30);
       if (daysPastDue === 0) status = "performing";
     }
-    if (status === "defaulted" && loan.status !== "defaulted") losses += Math.max(0, outstanding - outstanding * loan.collateral / 100);
+    if (status === "defaulted") losses += Math.max(0, outstanding - outstanding * loan.collateral / 100);
     return { ...loan, outstanding, nextPaymentDay, daysPastDue, status };
   });
   return { ...state, activeLoans, cash: Math.max(0, state.cash + cashDelta - losses), creditLosses: state.creditLosses + losses, loans: Math.max(0, state.loans - Math.min(state.loans, losses)) };
@@ -183,16 +182,15 @@ function updateSegments(state: GameState): GameState {
   const totalExisting = Math.max(1, state.customerSegments.reduce((sum, segment) => sum + segment.customers, 0));
   const branchCapacity = state.branchOffices.reduce((sum, branch) => sum + branch.capacity, 0);
   const servicePressure = state.customers / Math.max(1, branchCapacity + state.digitalLevel * 20);
-  const segments = state.customerSegments.map((segment) => {
-    const share = segment.customers / totalExisting;
-    const targetCustomers = Math.max(1, round(state.customers * share));
+  const customerSegments = state.customerSegments.map((segment) => {
+    const targetCustomers = Math.max(1, round(state.customers * segment.customers / totalExisting));
     const channelFit = segment.preferredChannel === "digital" ? state.digitalLevel : segment.preferredChannel === "branch" ? state.branchOffices.length * 14 : state.employeeRoster.length * 5;
     const satisfaction = clamp(segment.satisfaction + (channelFit - 55) * 0.004 - Math.max(0, servicePressure - 1) * 0.16, 25, 98);
     const loyalty = clamp(segment.loyalty + (satisfaction - 70) * 0.006, 20, 98);
     const churnRisk = clamp(42 - loyalty * 0.32 + Math.max(0, servicePressure - 1) * 20, 2, 70);
     return { ...segment, customers: targetCustomers, satisfaction, loyalty, churnRisk };
   });
-  return { ...state, customerSegments: segments };
+  return { ...state, customerSegments };
 }
 
 function createMonthlyReport(state: GameState): FinancialReport {
@@ -202,9 +200,22 @@ function createMonthlyReport(state: GameState): FinancialReport {
   const netIncome = state.profit * 30;
   const assets = state.cash + state.loans + state.loanLossReserve;
   const liabilities = state.deposits + state.wholesaleFunding;
-  const equity = assets - liabilities;
-  const operatingCashFlow = netIncome + state.creditLosses - Math.max(0, state.customersGained * 800);
-  return { id: `report-${state.year}-${state.quarter}-${state.day}`, day: state.day, year: state.year, quarter: state.quarter, interestIncome, feeIncome, operatingExpenses, creditLosses: state.creditLosses * 30, netIncome, assets, liabilities, equity, operatingCashFlow, budgetVariance: state.monthlyBudget - operatingExpenses };
+  return {
+    id: `report-${state.year}-${state.quarter}-${state.day}`,
+    day: state.day,
+    year: state.year,
+    quarter: state.quarter,
+    interestIncome,
+    feeIncome,
+    operatingExpenses,
+    creditLosses: state.creditLosses * 30,
+    netIncome,
+    assets,
+    liabilities,
+    equity: assets - liabilities,
+    operatingCashFlow: netIncome + state.creditLosses - Math.max(0, state.customersGained * 800),
+    budgetVariance: state.monthlyBudget - operatingExpenses,
+  };
 }
 
 function updateBoard(state: GameState): GameState {
@@ -217,33 +228,29 @@ function updateBoard(state: GameState): GameState {
     if (member.priority === "technology") change = state.digitalLevel >= 55 ? 0.6 : -0.5;
     return { ...member, support: clamp(member.support + change, 1, 100) };
   });
-  const weighted = boardMembers.reduce((sum, member) => sum + member.support * member.influence, 0) / Math.max(1, boardMembers.reduce((sum, member) => sum + member.influence, 0));
-  return { ...state, boardMembers, boardConfidence: clamp(weighted, 1, 100) };
+  const influence = Math.max(1, boardMembers.reduce((sum, member) => sum + member.influence, 0));
+  const confidence = boardMembers.reduce((sum, member) => sum + member.support * member.influence, 0) / influence;
+  return { ...state, boardMembers, boardConfidence: clamp(confidence, 1, 100) };
 }
 
 function updateTutorial(state: GameState): GameState {
-  return {
-    ...state,
-    tutorialSteps: state.tutorialSteps.map((step) => {
-      if (step.completed) return step;
-      const completed =
-        (step.id === "tutorial-rates" && state.day > 3) ||
-        (step.id === "tutorial-project" && state.projects.length > 0) ||
-        (step.id === "tutorial-leader" && state.employeeRoster.some((employee) => employee.executiveRole)) ||
-        (step.id === "tutorial-credit" && state.activeLoans.length > 0) ||
-        (step.id === "tutorial-report" && state.reports.length > 0);
-      return { ...step, completed };
-    }),
-  };
+  return { ...state, tutorialSteps: state.tutorialSteps.map((step) => {
+    if (step.completed) return step;
+    const completed =
+      (step.id === "tutorial-rates" && state.day > 3) ||
+      (step.id === "tutorial-project" && state.projects.length > 0) ||
+      (step.id === "tutorial-leader" && state.employeeRoster.some((employee) => employee.executiveRole)) ||
+      (step.id === "tutorial-credit" && state.activeLoans.length > 0) ||
+      (step.id === "tutorial-report" && state.reports.length > 0);
+    return { ...step, completed };
+  }) };
 }
 
 function advanceV4Day(state: GameState): GameState {
-  let next = advanceProjects(state);
-  next = applyAutomation(next);
-  next = updateActiveLoans(next);
-  next = updateSegments(next);
+  let next = updateSegments(updateActiveLoans(applyAutomation(advanceProjects(state))));
   if (next.day % 30 === 0) {
-    next = { ...updateBoard(next), reports: [createMonthlyReport(next), ...next.reports].slice(0, 36), candidatePool: next.candidatePool.length < 4 ? initialCandidates(next.day) : next.candidatePool };
+    next = updateBoard(next);
+    next = { ...next, reports: [createMonthlyReport(next), ...next.reports].slice(0, 36), candidatePool: next.candidatePool.length < 4 ? initialCandidates(next.day) : next.candidatePool };
   }
   const previousStage = next.campaignStage;
   const campaignStage = deriveCampaignStage(next);
@@ -268,10 +275,9 @@ export function startBranchProject(state: GameState, districtId: string, profile
   const district = state.districts.find((item) => item.id === districtId);
   if (!district || stageRank(state.campaignStage) < stageRank(district.requiredStage) || state.branchOffices.some((branch) => branch.districtId === districtId) || state.projects.some((project) => project.districtId === districtId && project.status !== "completed")) return state;
   const duration = 75 + round(district.competition * 0.35);
-  const budget = district.openingCost;
-  if (state.cash < budget) return state;
-  const project: BankProject = { id: `project-branch-${districtId}-${state.day}`, name: `Open ${district.name}`, kind: "branch", status: "active", startDay: state.day, durationDays: duration, remainingDays: duration, budget, spent: 0, risk: 22 + district.competition * 0.35, districtId, profile };
-  return addEvent({ ...state, cash: state.cash - budget, projects: [project, ...state.projects] }, createEvent(state.day, "neutral", "Branch project approved", `${district.name} will open in approximately ${duration} days.`));
+  if (state.cash < district.openingCost) return state;
+  const project: BankProject = { id: `project-branch-${districtId}-${state.day}`, name: `Open ${district.name}`, kind: "branch", status: "active", startDay: state.day, durationDays: duration, remainingDays: duration, budget: district.openingCost, spent: 0, risk: 22 + district.competition * 0.35, districtId, profile };
+  return addEvent({ ...state, cash: state.cash - district.openingCost, projects: [project, ...state.projects] }, createEvent(state.day, "neutral", "Branch project approved", `${district.name} will open in approximately ${duration} days.`));
 }
 
 export function startStrategicProject(state: GameState, kind: "mobile-bank" | "core-banking" | "head-office"): GameState {
@@ -297,10 +303,8 @@ export function startBranchUpgrade(state: GameState, branchId: string): GameStat
 
 export function hireCandidateRefined(state: GameState, candidateId: string): GameState {
   const candidate = state.candidatePool.find((item) => item.id === candidateId);
-  if (!candidate) return state;
-  const recruitmentCost = candidate.salary * 2;
-  if (state.cash < recruitmentCost) return state;
-  return addEvent({ ...state, cash: state.cash - recruitmentCost, employeeRoster: [...state.employeeRoster, candidate], candidatePool: state.candidatePool.filter((item) => item.id !== candidateId), employees: state.employees + 1 }, createEvent(state.day, "positive", `${candidate.name} hired`, `${candidate.role} joined the bank with the trait “${candidate.trait}”.`));
+  if (!candidate || state.cash < candidate.salary * 2) return state;
+  return addEvent({ ...state, cash: state.cash - candidate.salary * 2, employeeRoster: [...state.employeeRoster, candidate], candidatePool: state.candidatePool.filter((item) => item.id !== candidateId), employees: state.employees + 1 }, createEvent(state.day, "positive", `${candidate.name} hired`, `${candidate.role} joined the bank with the trait “${candidate.trait}”.`));
 }
 
 export function appointExecutive(state: GameState, employeeId: string, executiveRole: ExecutiveRole): GameState {
@@ -341,7 +345,10 @@ export function restructureLoan(state: GameState, loanId: string): GameState {
 }
 
 export function setStrategicFocus(state: GameState, strategicFocus: GameState["strategicFocus"]): GameState {
-  const boardMembers = state.boardMembers.map((member) => ({ ...member, support: clamp(member.support + (member.priority === strategicFocus || (strategicFocus === "trust" && member.priority === "customers") || (strategicFocus === "efficiency" && member.priority === "profit") ? 3 : -0.5), 1, 100) }));
+  const boardMembers = state.boardMembers.map((member) => {
+    const aligned = member.priority === "growth" && strategicFocus === "growth" || member.priority === "customers" && strategicFocus === "trust" || member.priority === "profit" && strategicFocus === "efficiency" || member.priority === "technology" && strategicFocus === "digital" || strategicFocus === "balanced";
+    return { ...member, support: clamp(member.support + (aligned ? 3 : -0.5), 1, 100) };
+  });
   return addEvent({ ...state, strategicFocus, boardMembers }, createEvent(state.day, "neutral", "Group strategy updated", `Management selected ${strategicFocus} as the current strategic focus.`));
 }
 
