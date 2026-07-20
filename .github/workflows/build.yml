@@ -18,5 +18,23 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Production build
-        run: npm run build
+      - name: Run production build
+        id: production_build
+        shell: bash
+        run: |
+          set +e
+          npm run build > build.log 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build-log
+          path: build.log
+      - name: Verify production build
+        shell: bash
+        run: |
+          cat build.log
+          exit ${{ steps.production_build.outputs.exit_code }}
