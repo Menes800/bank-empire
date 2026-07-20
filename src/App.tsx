@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { advanceDaysV8, chooseDecisionV5, createCampaign } from "./game/engine";
+import { advanceDaysV83, chooseDecisionV5, createCampaign } from "./game/engine";
 import { clearGame, hasCheckpoint, loadGame, restoreCheckpoint, saveGame, type GameState } from "./game/store";
 import { DevPanel } from "./dev/DevPanel";
 import { DecisionModal, GameOverModal } from "./ui/Modals";
@@ -97,7 +97,7 @@ export default function App() {
   }} />;
 
   const action = (fn: (state: GameState) => GameState) => setGame((current) => fn(current));
-  const advance = (days: number) => action((state) => advanceDaysV8(state, days));
+  const advance = (days: number) => action((state) => advanceDaysV83(state, days));
   const pageTitle = pageDefinitions[page].label;
   const restart = () => { localStorage.removeItem("bank-empire-bank-mark"); setGame(clearGame()); setPage("overview"); };
   const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(checkpoint); setPage("risk"); } };
