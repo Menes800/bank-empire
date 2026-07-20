@@ -109,9 +109,10 @@ export default function App() {
   const criticalInbox = openInbox.filter((task) => task.urgency === "critical").length;
   const creditBadge = game.loanApplications.length + game.collectionCases.filter((item) => !item.closed).length;
   const openDevFromVersion = () => setVersionClicks((count) => { const next = count + 1; if (next >= 5) { setDevOpen(true); return 0; } return next; });
+  const compactAttention = page !== "overview" && page !== "inbox";
 
-  return <div className="app app-v8" data-brand={game.brandTheme}>
-    <aside className="sidebar sidebar-v8">
+  return <div className="app app-v8 app-v82" data-brand={game.brandTheme} data-page={page}>
+    <aside className="sidebar sidebar-v8 sidebar-v82">
       <div className="logo logo-v7"><span>{bankMark}</span><div><strong>{game.bankName}</strong><small>{game.campaignStage} banking group</small></div></div>
       {game.devModeUsed && <div className="sidebar-dev-save">DEV SAVE</div>}
       <nav className="grouped-navigation">{navigation.map((group) => {
@@ -120,24 +121,24 @@ export default function App() {
         return <section className="nav-group" key={group.label}><p>{group.label}</p>{groupPages.map((key) => {
           const definition = pageDefinitions[key];
           const badge = key === "inbox" ? openInbox.length : key === "clients" ? creditBadge : 0;
-          return <button key={key} className={page === key ? "nav-item active" : "nav-item"} onClick={() => setPage(key)}><span className="nav-code">{definition.icon}</span><strong>{definition.label}</strong>{badge > 0 && <b className={`nav-badge ${key === "inbox" && criticalInbox > 0 ? "critical" : ""}`}>{badge}</b>}{key === "network" && game.projects.some((project) => project.status === "delayed") && <b className="nav-alert">!</b>}</button>;
+          return <button key={key} className={page === key ? "nav-item active" : "nav-item"} onClick={() => setPage(key)} title={definition.label}><span className="nav-code">{definition.icon}</span><strong>{definition.label}</strong>{badge > 0 && <b className={`nav-badge ${key === "inbox" && criticalInbox > 0 ? "critical" : ""}`}>{badge}</b>}{key === "network" && game.projects.some((project) => project.status === "delayed") && <b className="nav-alert">!</b>}</button>;
         })}</section>;
       })}</nav>
       <button className="sidebar-release" onClick={openDevFromVersion} title="Playtest tools: Ctrl + Shift + D"><span>v{APP_VERSION}</span><small>{APP_RELEASE_NAME}</small></button>
       <div className="sidebar-footer"><div className="avatar">{game.founderName.slice(0, 1).toUpperCase()}</div><div><strong>{game.founderName}</strong><small>{careerTitles[game.careerLevel]}</small></div></div>
     </aside>
 
-    <main className="main-content main-content-v8">
-      <div className="sticky-command-header">
+    <main className={`main-content main-content-v8 main-content-v82 page-${page}`}>
+      <div className="sticky-command-header sticky-command-header-v82">
         <div className="economy-ticker"><span className={`cycle-chip ${game.economicCycle}`}>{game.economicCycle}</span><span>Policy <b>{game.baseRate.toFixed(2)}%</b></span><span>Inflation <b>{game.inflation.toFixed(1)}%</b></span><span>GDP <b>{game.gdpGrowth.toFixed(1)}%</b></span><span>Confidence <b>{game.consumerConfidence.toFixed(0)}</b></span><span className={game.bankRunRisk > 35 ? "ticker-warning" : ""}>Run risk <b>{game.bankRunRisk.toFixed(0)}</b></span></div>
-        <header className="main-header main-header-v8">
-          <div><p className="eyebrow">{game.campaignStage.toUpperCase()} · YEAR {game.year} · Q{game.quarter} · WEEK {game.week} · DAY {game.day}</p><h1>{pageTitle}</h1></div>
-          <div className="header-actions"><button className="icon-button help-trigger" onClick={() => setHelpOpen(true)}>?</button><button className="icon-button" onClick={() => setDark((value) => !value)}>{dark ? "☀" : "◐"}</button>{openInbox.length > 0 && <button className={`inbox-header-chip ${criticalInbox > 0 ? "critical" : ""}`} onClick={() => setPage("inbox")}><small>INBOX</small><strong>{openInbox.length}</strong><span>{criticalInbox > 0 ? `${criticalInbox} critical` : "open"}</span></button>}{nearestProject && <button className="nearest-project-chip" onClick={() => setPage("network")}><small>PROJECT</small><strong>{nearestProject.remainingDays} days</strong><span>{nearestProject.name}</span></button>}<button className="cash-pill" onClick={() => setPage("overview")}><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></button><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(30)}>+30 days →</button></div></div>
+        <header className="main-header main-header-v8 main-header-v82">
+          <div className="page-heading-v82"><p className="eyebrow">{game.campaignStage.toUpperCase()} · Y{game.year} Q{game.quarter} · WEEK {game.week} · DAY {game.day}</p><h1>{pageTitle}</h1></div>
+          <div className="header-actions"><button className="icon-button help-trigger" onClick={() => setHelpOpen(true)} title="Help">?</button><button className="icon-button" onClick={() => setDark((value) => !value)} title="Theme">{dark ? "☀" : "◐"}</button>{openInbox.length > 0 && <button className={`inbox-header-chip ${criticalInbox > 0 ? "critical" : ""}`} onClick={() => setPage("inbox")}><small>INBOX</small><strong>{openInbox.length}</strong><span>{criticalInbox > 0 ? `${criticalInbox} critical` : "open"}</span></button>}{nearestProject && <button className="nearest-project-chip" onClick={() => setPage("network")}><small>PROJECT</small><strong>{nearestProject.remainingDays} days</strong><span>{nearestProject.name}</span></button>}<button className="cash-pill" onClick={() => setPage("overview")}><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></button><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(30)}>+30 days →</button></div></div>
         </header>
       </div>
 
       <RiskForecastBar game={game} onOpenRisk={() => setPage("risk")} />
-      <AttentionStrip game={game} onNavigate={navigate} />
+      <AttentionStrip game={game} onNavigate={navigate} compact={compactAttention} />
 
       {page === "overview" && <OverviewPage game={game} onOpenBoard={() => setPage("reports")} />}
       {page === "inbox" && <InboxPage game={game} action={action} onNavigate={navigate} />}
