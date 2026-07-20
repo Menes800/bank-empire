@@ -12,13 +12,13 @@ export function loadGame(): GameState {
     const saved = current ?? legacy;
     if (!saved) return emptyGame();
 
-    const parsed = JSON.parse(saved) as Partial<GameState>;
+    const parsed = JSON.parse(saved) as Partial<GameState> & { version?: number };
     const base = emptyGame();
     const legacyCapitalBoost = typeof parsed.version === "number" && parsed.version < 3 ? 3_000_000 : 0;
     const migrated: GameState = {
       ...base,
       ...parsed,
-      version: 6,
+      version: 7,
       cash: (parsed.cash ?? base.cash) + legacyCapitalBoost,
       competitors: parsed.competitors ?? base.competitors,
       objectives: parsed.objectives ?? base.objectives,
@@ -33,6 +33,14 @@ export function loadGame(): GameState {
         managerMandate: branch.managerMandate ?? (branch.managerId ? "guarded" : "manual"),
         localFocus: branch.localFocus ?? "service",
         managerBudget: branch.managerBudget ?? (branch.managerId ? 25_000 : 0),
+        localCustomers: branch.localCustomers ?? Math.min(branch.capacity, 220 + branch.level * 85),
+        localDeposits: branch.localDeposits ?? 0,
+        localLoans: branch.localLoans ?? 0,
+        lastMonthRevenue: branch.lastMonthRevenue ?? 0,
+        lastMonthCost: branch.lastMonthCost ?? 0,
+        lastMonthProfit: branch.lastMonthProfit ?? 0,
+        lifetimeProfit: branch.lifetimeProfit ?? 0,
+        lastManagerAction: branch.lastManagerAction ?? "Awaiting the first v0.7 monthly close.",
       })),
       projects: parsed.projects ?? [],
       employeeRoster: parsed.employeeRoster ?? base.employeeRoster,
@@ -40,7 +48,16 @@ export function loadGame(): GameState {
       automation: { ...base.automation, ...(parsed.automation ?? {}) },
       customerSegments: parsed.customerSegments ?? base.customerSegments,
       productTerms: { ...base.productTerms, ...(parsed.productTerms ?? {}) },
-      activeLoans: parsed.activeLoans ?? [],
+      activeLoans: (parsed.activeLoans ?? []).map((loan) => ({
+        ...loan,
+        status: loan.status === "watch" ? "late" : loan.status === "delinquent" ? (loan.daysPastDue >= 60 ? "overdue" : "late") : loan.status,
+        missedPayments: loan.missedPayments ?? Math.floor((loan.daysPastDue ?? 0) / 30),
+        lastPaymentDay: loan.lastPaymentDay ?? loan.originatedDay,
+        recoveryEstimate: loan.recoveryEstimate ?? Math.round(loan.outstanding * Math.min(.9, Math.max(.18, loan.collateral / 100 * .78 + .08))),
+      })),
+      collectionCases: parsed.collectionCases ?? [],
+      ceoInbox: parsed.ceoInbox ?? [],
+      competitorMoves: parsed.competitorMoves ?? [],
       boardMembers: parsed.boardMembers ?? base.boardMembers,
       reports: parsed.reports ?? [],
       tutorialSteps: parsed.tutorialSteps ?? base.tutorialSteps,
@@ -75,7 +92,7 @@ export function restoreCheckpoint(): GameState | null {
     const saved = localStorage.getItem(CHECKPOINT_KEY);
     if (!saved) return null;
     const state = JSON.parse(saved) as GameState;
-    const restored = { ...state, version: 6 as const, pendingDecision: null, gameOverReason: null, liquidityBreachDays: 0, capitalBreachDays: 0 };
+    const restored: GameState = { ...state, version: 7, collectionCases: state.collectionCases ?? [], ceoInbox: state.ceoInbox ?? [], competitorMoves: state.competitorMoves ?? [], pendingDecision: null, gameOverReason: null, liquidityBreachDays: 0, capitalBreachDays: 0 };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
     return restored;
   } catch {
