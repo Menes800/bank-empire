@@ -16,6 +16,10 @@ export type ExecutiveRole = "CFO" | "COO" | "CRO" | "CMO" | "CTO";
 export type AutomationMode = "manual" | "conservative" | "balanced" | "growth";
 export type CustomerSegmentKey = "students" | "young" | "families" | "affluent" | "seniors" | "small-business" | "corporate" | "property";
 export type ProductPreset = "competitive" | "balanced" | "premium" | "conservative";
+export type LoanStatus = "performing" | "late" | "overdue" | "collections" | "defaulted" | "restructured" | "written-off";
+export type CollectionStage = "early-arrears" | "workout" | "external-collections" | "enforcement" | "closed";
+export type InboxUrgency = "routine" | "important" | "critical";
+export type InboxStatus = "open" | "delegated" | "resolved";
 
 export type GameEvent = { id: string; day: number; tone: EventTone; title: string; body: string };
 export type HistoryPoint = { day: number; cash: number; deposits: number; loans: number; profit: number; customers: number; reputation: number; sharePrice: number };
@@ -62,6 +66,14 @@ export type BranchOffice = {
   managerMandate?: BranchMandate;
   localFocus?: BranchFocus;
   managerBudget?: number;
+  localCustomers?: number;
+  localDeposits?: number;
+  localLoans?: number;
+  lastMonthRevenue?: number;
+  lastMonthCost?: number;
+  lastMonthProfit?: number;
+  lifetimeProfit?: number;
+  lastManagerAction?: string;
 };
 
 export type BankProject = {
@@ -107,10 +119,53 @@ export type ActiveLoan = {
   rate: number;
   riskGrade: "A" | "B" | "C" | "D";
   collateral: number;
-  status: "performing" | "watch" | "delinquent" | "defaulted" | "restructured";
+  status: LoanStatus;
   daysPastDue: number;
   originatedDay: number;
   nextPaymentDay: number;
+  missedPayments?: number;
+  lastPaymentDay?: number;
+  recoveryEstimate?: number;
+};
+
+export type CollectionCase = {
+  id: string;
+  loanId: string;
+  customerName: string;
+  openedDay: number;
+  stage: CollectionStage;
+  daysPastDue: number;
+  missedAmount: number;
+  expectedRecovery: number;
+  agencyCost: number;
+  assignedTo: string;
+  lastAction: string;
+  closed: boolean;
+};
+
+export type CEOInboxTask = {
+  id: string;
+  createdDay: number;
+  category: "network" | "credit" | "people" | "market" | "risk" | "project";
+  title: string;
+  summary: string;
+  urgency: InboxUrgency;
+  page: string;
+  status: InboxStatus;
+  ownerRole?: ExecutiveRole;
+  sourceId?: string;
+  decision?: DecisionEvent;
+};
+
+export type CompetitorMove = {
+  id: string;
+  day: number;
+  competitorId: string;
+  competitorName: string;
+  type: "pricing" | "branch" | "digital" | "talent";
+  title: string;
+  description: string;
+  impact: number;
 };
 
 export type BoardMember = { id: string; name: string; archetype: string; priority: "growth" | "risk" | "customers" | "profit" | "technology"; support: number; influence: number };
@@ -130,10 +185,10 @@ export type CashFlowSnapshot = {
   closingCash: number;
 };
 
-export type CampaignInput = { founderName: string; bankName: string; background: string; brandTheme: BrandTheme; difficulty: Difficulty };
+export type CampaignInput = { founderName: string; bankName: string; bankLogo?: string; background: string; brandTheme: BrandTheme; difficulty: Difficulty };
 
 export type GameState = {
-  version: 6;
+  version: 7;
   setupComplete: boolean;
   founderName: string;
   background: string;
@@ -212,6 +267,9 @@ export type GameState = {
   customerSegments: CustomerSegment[];
   productTerms: Record<ProductKey, ProductTerms>;
   activeLoans: ActiveLoan[];
+  collectionCases: CollectionCase[];
+  ceoInbox: CEOInboxTask[];
+  competitorMoves: CompetitorMove[];
   boardMembers: BoardMember[];
   reports: FinancialReport[];
   tutorialSteps: TutorialStep[];
