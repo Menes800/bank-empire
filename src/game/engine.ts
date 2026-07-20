@@ -10,6 +10,7 @@ export * from "./actions";
 export * from "./v4/gameplay";
 export * from "./v4/advisor";
 export * from "./v41/pacing";
+export * from "./v5/gameplay";
 
 export function emptyGame(): GameState {
   const base: GameState = {
