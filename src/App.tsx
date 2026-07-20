@@ -37,6 +37,23 @@ type PageKey = (typeof pages)[number][0];
 const careerTitles = ["Local Founder", "Banking Executive", "Regional Director", "Group CEO", "Industry Leader"];
 const stageRank = { startup: 0, regional: 1, national: 2, group: 3, empire: 4 } as const;
 
+function initials(value: string) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "BE";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
+}
+
+function storedBankMark(bankName: string) {
+  try {
+    const saved = JSON.parse(localStorage.getItem("bank-empire-bank-mark") ?? "null") as { bankName?: string; mark?: string } | null;
+    if (saved?.bankName === bankName && saved.mark) return saved.mark.slice(0, 2).toUpperCase();
+  } catch {
+    // Fall back to generated initials for legacy saves.
+  }
+  return initials(bankName);
+}
+
 export default function App() {
   const [game, setGame] = useState<GameState>(() => loadGame());
   const [page, setPage] = useState<PageKey>("overview");
@@ -51,20 +68,24 @@ export default function App() {
 
   const availablePages = useMemo(() => pages.filter(([key]) => key !== "holdings" || stageRank[game.campaignStage] >= stageRank.regional), [game.campaignStage]);
 
-  if (!game.setupComplete) return <SetupScreen onStart={(draft: SetupDraft) => setGame(createCampaign(draft))} />;
+  if (!game.setupComplete) return <SetupScreen onStart={(draft: SetupDraft) => {
+    localStorage.setItem("bank-empire-bank-mark", JSON.stringify({ bankName: draft.bankName, mark: draft.bankLogo }));
+    setGame(createCampaign(draft));
+  }} />;
 
   const action = (fn: (state: GameState) => GameState) => setGame((current) => fn(current));
   const advance = (days: number) => action((state) => advanceDaysV6(state, days));
   const pageTitle = pages.find(([key]) => key === page)?.[1] ?? "Overview";
-  const restart = () => { setGame(clearGame()); setPage("overview"); };
+  const restart = () => { localStorage.removeItem("bank-empire-bank-mark"); setGame(clearGame()); setPage("overview"); };
   const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(checkpoint); setPage("risk"); } };
   const navigate = (target: string) => { if (pages.some(([key]) => key === target)) setPage(target as PageKey); };
   const crisisOpen = Boolean(game.pendingDecision?.id.startsWith("v5-"));
   const nearestProject = game.projects.filter((project) => project.status !== "completed").sort((a, b) => a.remainingDays - b.remainingDays)[0];
+  const bankMark = storedBankMark(game.bankName);
 
   return <div className="app" data-brand={game.brandTheme}>
     <aside className="sidebar">
-      <div className="logo"><span>{game.bankName.slice(0, 1)}</span><div><strong>{game.bankName}</strong><small>{game.campaignStage} banking group</small></div></div>
+      <div className="logo"><span>{bankMark}</span><div><strong>{game.bankName}</strong><small>{game.campaignStage} banking group</small></div></div>
       <nav><p>MANAGEMENT</p>{availablePages.map(([key, label, icon]) => <button key={key} className={page === key ? "nav-item active" : "nav-item"} onClick={() => setPage(key)}><span>{icon}</span>{label}{key === "clients" && game.loanApplications.length > 0 ? <b className="nav-badge">{game.loanApplications.length}</b> : null}{key === "network" && game.projects.some((project) => project.status === "delayed") ? <b className="nav-alert">!</b> : null}</button>)}</nav>
       <div className="sidebar-footer"><div className="avatar">{game.founderName.slice(0, 1).toUpperCase()}</div><div><strong>{game.founderName}</strong><small>{careerTitles[game.careerLevel]}</small></div></div>
     </aside>
@@ -93,7 +114,7 @@ export default function App() {
       {page === "career" && <CareerPage game={game} action={action} />}
       {page === "holdings" && <HoldingsPage game={game} action={action} />}
 
-      <footer className="game-footer"><span>Autosaved locally · Bank Empire v0.6.1</span><button onClick={() => { if (window.confirm("Start a new campaign? Your current save will be removed.")) restart(); }}>New campaign</button></footer>
+      <footer className="game-footer"><span>Autosaved locally · Bank Empire v0.6.2</span><button onClick={() => { if (window.confirm("Start a new campaign? Your current save will be removed.")) restart(); }}>New campaign</button></footer>
     </main>
 
     <HelpDrawer open={helpOpen} game={game} onClose={() => setHelpOpen(false)} />
