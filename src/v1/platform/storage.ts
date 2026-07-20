@@ -1,13 +1,26 @@
-import type { GameState } from '../game/types';
+import type { Branch, GameState } from '../game/types';
 
 const SAVE_KEY = 'bank-empire-v1-alpha';
+
+const migrateBranch = (branch: Branch): Branch => ({
+  ...branch,
+  mandate: branch.mandate ?? 'balanced',
+  staffingPolicy: branch.staffingPolicy ?? 'balanced',
+});
+
+const migrateSave = (parsed: GameState): GameState => ({
+  ...parsed,
+  gameVersion: '1.0.0-alpha.2',
+  lendingPolicy: parsed.lendingPolicy ?? 'balanced',
+  branches: parsed.branches.map(migrateBranch),
+});
 
 export const loadV1Save = (): GameState | null => {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as GameState;
-    return parsed.saveVersion === 1 ? parsed : null;
+    return parsed.saveVersion === 1 ? migrateSave(parsed) : null;
   } catch {
     return null;
   }
