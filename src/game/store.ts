@@ -1,29 +1,16 @@
-export type GameState = {
-  bankName: string;
-  cash: number;
-  deposits: number;
-  loans: number;
-  reputation: number;
-  day: number;
-};
+import { emptyGame } from './engine';
+import type { GameState } from './types';
 
-const STORAGE_KEY = 'bank-empire-save-v1';
-
-export const initialState: GameState = {
-  bankName: 'Nordic Trust',
-  cash: 5000000,
-  deposits: 12000000,
-  loans: 8000000,
-  reputation: 50,
-  day: 1,
-};
+const STORAGE_KEY = 'bank-empire-save-v2';
 
 export function loadGame(): GameState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? { ...initialState, ...JSON.parse(saved) } : initialState;
+    if (!saved) return emptyGame();
+    const parsed = JSON.parse(saved) as Partial<GameState>;
+    return { ...emptyGame(), ...parsed, version: 2 };
   } catch {
-    return initialState;
+    return emptyGame();
   }
 }
 
@@ -31,12 +18,9 @@ export function saveGame(state: GameState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export function advanceDay(state: GameState): GameState {
-  const interestIncome = Math.round(state.loans * 0.0008);
-  const depositCost = Math.round(state.deposits * 0.00025);
-  return {
-    ...state,
-    cash: state.cash + interestIncome - depositCost,
-    day: state.day + 1,
-  };
+export function clearGame(): GameState {
+  localStorage.removeItem(STORAGE_KEY);
+  return emptyGame();
 }
+
+export type { GameState, BrandTheme, Difficulty, ProductKey } from './types';
