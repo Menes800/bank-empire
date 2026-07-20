@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { BrandTheme, Difficulty } from "../game/store";
+import { APP_RELEASE_NAME, APP_VERSION } from "../version";
 import { cn, money } from "./format";
 
 export type SetupDraft = {
@@ -174,11 +175,12 @@ export function SetupScreen({ onStart }: { onStart: (draft: SetupDraft) => void 
             <div className="setup-actions-v62"><button className="secondary" onClick={() => setStep(1)}>← Back to founder</button><button className="primary open-bank-button" disabled={!draft.bankName.trim() || !logoDisplay} onClick={start}>Open your bank →</button></div>
           </>}
         </div>
+        <div className="setup-version-v7">Bank Empire v{APP_VERSION} · {APP_RELEASE_NAME}</div>
       </section>
 
       <aside className="setup-live-preview">
         <div className="preview-noise" />
-        <div className="preview-topline"><span><i /> LIVE BANK PREVIEW</span><small>Changes update instantly</small></div>
+        <div className="preview-topline"><span><i /> LIVE BANK PREVIEW</span><small>v{APP_VERSION} · Changes update instantly</small></div>
 
         <div className="preview-bank-identity">
           <span className="preview-bank-logo">{logoDisplay}</span>
