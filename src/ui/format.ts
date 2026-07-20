@@ -1,8 +1,17 @@
-export const money = new Intl.NumberFormat("en-GB", {
-  style: "currency",
-  currency: "NOK",
-  maximumFractionDigits: 0,
+const number = new Intl.NumberFormat("en-GB", {
+  maximumFractionDigits: 1,
 });
+
+export const money = {
+  format(value: number) {
+    const sign = value < 0 ? "−" : "";
+    const absolute = Math.abs(value);
+    if (absolute >= 1_000_000_000) return `${sign}$${number.format(absolute / 1_000_000_000)}bn`;
+    if (absolute >= 1_000_000) return `${sign}$${number.format(absolute / 1_000_000)}m`;
+    if (absolute >= 1_000) return `${sign}$${number.format(absolute / 1_000)}k`;
+    return `${sign}$${Math.round(absolute).toLocaleString("en-GB")}`;
+  },
+};
 
 export const compact = new Intl.NumberFormat("en-GB", {
   notation: "compact",
