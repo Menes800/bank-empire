@@ -10,10 +10,15 @@ export type CampaignStage = "startup" | "regional" | "national" | "group" | "emp
 export type BranchProfile = "retail" | "mortgage" | "business" | "wealth";
 export type BranchMandate = "manual" | "guarded" | "autonomous" | "growth";
 export type BranchFocus = "service" | "deposits" | "lending" | "business";
+export type BranchPriority = "balanced" | "growth" | "deposits" | "business" | "profitability";
+export type UpgradeAuthority = "manual" | "small" | "profitable";
 export type ProjectKind = "branch" | "branch-upgrade" | "head-office" | "mobile-bank" | "core-banking" | "integration";
 export type ProjectStatus = "planned" | "active" | "delayed" | "completed";
 export type ExecutiveRole = "CFO" | "COO" | "CRO" | "CMO" | "CTO";
 export type AutomationMode = "manual" | "conservative" | "balanced" | "growth";
+export type ManagementControlMode = "automatic" | "major" | "manual";
+export type ManagementArea = "treasury" | "lending" | "marketing" | "operations";
+export type EmployeeDepartment = "Executive" | "Branch Operations" | "Credit & Collections" | "Finance & Treasury" | "Customer Growth" | "Technology";
 export type CustomerSegmentKey = "students" | "young" | "families" | "affluent" | "seniors" | "small-business" | "corporate" | "property";
 export type ProductPreset = "competitive" | "balanced" | "premium" | "conservative";
 export type LoanStatus = "performing" | "watch" | "delinquent" | "late" | "overdue" | "collections" | "defaulted" | "restructured" | "written-off";
@@ -66,6 +71,10 @@ export type BranchOffice = {
   managerMandate?: BranchMandate;
   localFocus?: BranchFocus;
   managerBudget?: number;
+  managerControl?: boolean;
+  operatingPriority?: BranchPriority;
+  upgradeAuthority?: UpgradeAuthority;
+  pendingUpgradeRecommendation?: boolean;
   localCustomers?: number;
   localDeposits?: number;
   localLoans?: number;
@@ -104,9 +113,17 @@ export type EmployeeProfile = {
   energy: number;
   trait: string;
   assignedBranchId: string | null;
+  department?: EmployeeDepartment;
+  reportsTo?: string | null;
+  performance?: number;
+  workload?: number;
+  wellbeing?: number;
+  potential?: number;
+  tenureMonths?: number;
 };
 
 export type AutomationPlan = { treasury: AutomationMode; lending: AutomationMode; marketing: AutomationMode; operations: AutomationMode };
+export type ManagementControlPlan = Record<ManagementArea, ManagementControlMode>;
 export type CustomerSegment = { key: CustomerSegmentKey; name: string; customers: number; satisfaction: number; loyalty: number; profitability: number; churnRisk: number; preferredChannel: "branch" | "digital" | "advisor" };
 export type ProductTerms = { key: ProductKey; customerRate: number; monthlyFee: number; approvalThreshold: number; serviceLevel: number; marketingBudget: number };
 
@@ -188,7 +205,7 @@ export type CashFlowSnapshot = {
 export type CampaignInput = { founderName: string; bankName: string; bankLogo?: string; background: string; brandTheme: BrandTheme; difficulty: Difficulty };
 
 export type GameState = {
-  version: 7;
+  version: 8;
   setupComplete: boolean;
   founderName: string;
   background: string;
@@ -264,6 +281,7 @@ export type GameState = {
   employeeRoster: EmployeeProfile[];
   candidatePool: EmployeeProfile[];
   automation: AutomationPlan;
+  managementControl: ManagementControlPlan;
   customerSegments: CustomerSegment[];
   productTerms: Record<ProductKey, ProductTerms>;
   activeLoans: ActiveLoan[];
@@ -276,4 +294,6 @@ export type GameState = {
   dismissedAdvisorIds: string[];
   monthlyBudget: number;
   cashFlowHistory: CashFlowSnapshot[];
+  devModeUsed: boolean;
+  bankruptcyProtection: boolean;
 };
