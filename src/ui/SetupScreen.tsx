@@ -30,42 +30,21 @@ type DifficultyOption = {
 };
 
 const backgrounds: BackgroundOption[] = [
-  {
-    key: "Operations",
-    icon: "O",
-    title: "Operations",
-    summary: "Build a dependable bank with stronger service delivery.",
-    advantage: "+1 employee · higher starting satisfaction",
-    tradeoff: "No extra reserves or customer-growth bonus",
-  },
-  {
-    key: "Finance",
-    icon: "F",
-    title: "Finance",
-    summary: "Begin with stronger controls, reserves and credit expertise.",
-    advantage: "+compliance · +capital · stronger credit analyst",
-    tradeoff: "Slower customer and brand start",
-  },
-  {
-    key: "Sales",
-    icon: "S",
-    title: "Sales",
-    summary: "Open with more customers and a more visible local brand.",
-    advantage: "+50 customers · +reputation · +brand strength",
-    tradeoff: "No additional operating or reserve protection",
-  },
+  { key: "Operations", icon: "O", title: "Operations", summary: "A dependable opening team and stronger service delivery.", advantage: "+1 employee and higher satisfaction", tradeoff: "No reserve or acquisition bonus" },
+  { key: "Finance", icon: "F", title: "Finance", summary: "Better controls, reserves and credit expertise from day one.", advantage: "+capital, compliance and credit skill", tradeoff: "Slower customer and brand start" },
+  { key: "Sales", icon: "S", title: "Sales", summary: "A larger opening customer base and stronger local visibility.", advantage: "+customers, reputation and brand", tradeoff: "No additional operating protection" },
 ];
 
 const difficulties: DifficultyOption[] = [
-  { key: "relaxed", title: "Relaxed", cash: 10_000_000, summary: "More room to learn and recover from early mistakes.", pressure: "Largest opening cash buffer" },
-  { key: "balanced", title: "Balanced", cash: 8_000_000, summary: "The intended management and risk experience.", pressure: "Standard opening cash buffer" },
-  { key: "hard", title: "Hard", cash: 6_500_000, summary: "Thin liquidity leaves less room for rushed expansion.", pressure: "Smallest opening cash buffer" },
+  { key: "relaxed", title: "Relaxed", cash: 10_000_000, summary: "More room to learn and recover.", pressure: "Largest cash buffer" },
+  { key: "balanced", title: "Balanced", cash: 8_000_000, summary: "The intended management experience.", pressure: "Standard cash buffer" },
+  { key: "hard", title: "Hard", cash: 6_500_000, summary: "Thin liquidity punishes rushed expansion.", pressure: "Smallest cash buffer" },
 ];
 
 const brandNames: Record<BrandTheme, { title: string; description: string }> = {
-  forest: { title: "Forest", description: "Established, trustworthy and local" },
-  copper: { title: "Copper", description: "Bold, commercial and ambitious" },
-  gold: { title: "Gold", description: "Premium, selective and institutional" },
+  forest: { title: "Forest", description: "Established and trustworthy" },
+  copper: { title: "Copper", description: "Commercial and ambitious" },
+  gold: { title: "Gold", description: "Premium and institutional" },
 };
 
 function initials(value: string) {
@@ -95,7 +74,7 @@ export function SetupScreen({ onStart }: { onStart: (draft: SetupDraft) => void 
   const launchSummary = useMemo(() => [
     { label: "Opening cash", value: money.format(selectedDifficulty.cash) },
     { label: "Founder edge", value: selectedBackground.title },
-    { label: "First market", value: "Harbour Quarter" },
+    { label: "First branch", value: "Harbour Quarter" },
   ], [selectedBackground.title, selectedDifficulty.cash]);
 
   const updateBankName = (bankName: string) => {
@@ -108,109 +87,59 @@ export function SetupScreen({ onStart }: { onStart: (draft: SetupDraft) => void 
     onStart(finalDraft);
   };
 
-  return (
-    <main className="setup-shell setup-v62" data-brand={draft.brandTheme} data-step={step}>
-      <section className="setup-workspace">
-        <div className="setup-topbar">
-          <div className="setup-brand"><span>BE</span><div><strong>BANK EMPIRE</strong><small>Build the institution from the ground up</small></div></div>
-          <div className="setup-progress" aria-label={`Step ${step} of 2`}>
-            <button className={step >= 1 ? "active" : ""} onClick={() => setStep(1)}><span>1</span><div><strong>Founder</strong><small>Create your edge</small></div></button>
-            <i />
-            <button className={step >= 2 ? "active" : ""} disabled={!draft.founderName.trim()} onClick={() => setStep(2)}><span>2</span><div><strong>Bank</strong><small>Design the identity</small></div></button>
-          </div>
-        </div>
+  return <main className="setup-shell setup-v81" data-brand={draft.brandTheme}>
+    <header className="setup-header-v81">
+      <div className="setup-brand-v81"><span>BE</span><div><strong>BANK EMPIRE</strong><small>Build the institution, then let management run it</small></div></div>
+      <div className="setup-progress-v81" aria-label={`Step ${step} of 2`}>
+        <button className={step === 1 ? "active" : "complete"} onClick={() => setStep(1)}><span>1</span><div><strong>Founder</strong><small>Opening advantage</small></div></button>
+        <i />
+        <button className={step === 2 ? "active" : ""} disabled={!draft.founderName.trim()} onClick={() => setStep(2)}><span>2</span><div><strong>Bank</strong><small>Identity and difficulty</small></div></button>
+      </div>
+      <div className="setup-version-v81">v{APP_VERSION}<small>{APP_RELEASE_NAME}</small></div>
+    </header>
 
-        <div className="setup-content-v62">
-          {step === 1 ? <>
-            <div className="setup-heading-v62">
-              <p className="eyebrow">01 / 02 · CREATE YOUR FOUNDER</p>
-              <h1>Who will build<br />the bank?</h1>
-              <p>Your founder is not just a name. The professional background changes the opening team, customer position and the safety margin you begin with.</p>
-            </div>
+    <section className="setup-frame-v81">
+      <div className="setup-form-v81">
+        {step === 1 ? <>
+          <div className="setup-title-v81"><p className="eyebrow">STEP 1 OF 2 · FOUNDER</p><h1>Choose who builds the bank.</h1><p>The founder background changes your opening team and safety margin. It is a permanent campaign choice.</p></div>
 
-            <label className="setup-field-v62">
-              <span>Founder name</span>
-              <input autoFocus value={draft.founderName} onChange={(event) => setDraft({ ...draft, founderName: event.target.value })} placeholder="Enter your name" />
-            </label>
+          <label className="setup-input-v81"><span>Founder name</span><input autoFocus value={draft.founderName} onChange={(event) => setDraft({ ...draft, founderName: event.target.value })} placeholder="Enter your name" /></label>
 
-            <div className="setup-section-label"><div><strong>Professional background</strong><small>Choose one permanent opening advantage and accept its trade-off.</small></div><span>1 choice</span></div>
-            <div className="background-choice-grid">
-              {backgrounds.map((option) => <button key={option.key} className={cn("background-choice", draft.background === option.key && "selected")} onClick={() => setDraft({ ...draft, background: option.key })}>
-                <div className="background-choice-head"><span>{option.icon}</span><div><strong>{option.title}</strong><small>{option.summary}</small></div>{draft.background === option.key && <b>✓</b>}</div>
-                <div className="background-effect positive"><i>+</i><span>{option.advantage}</span></div>
-                <div className="background-effect tradeoff"><i>−</i><span>{option.tradeoff}</span></div>
-              </button>)}
-            </div>
+          <div className="setup-section-v81"><div><strong>Professional background</strong><small>Choose one advantage and accept its trade-off.</small></div><span>ONE CHOICE</span></div>
+          <div className="background-grid-v81">{backgrounds.map((option) => <button key={option.key} className={cn("background-card-v81", draft.background === option.key && "selected")} onClick={() => setDraft({ ...draft, background: option.key })}>
+            <div className="background-head-v81"><span>{option.icon}</span><div><strong>{option.title}</strong><small>{option.summary}</small></div>{draft.background === option.key && <b>✓</b>}</div>
+            <div className="choice-effect-v81 positive"><i>+</i><span>{option.advantage}</span></div>
+            <div className="choice-effect-v81 tradeoff"><i>−</i><span>{option.tradeoff}</span></div>
+          </button>)}</div>
 
-            <div className="setup-next-card"><div><small>YOUR OPENING PROFILE</small><strong>{selectedBackground.title} founder</strong><p>{selectedBackground.advantage}. This will be applied when the licence is issued.</p></div><button className="primary" disabled={!draft.founderName.trim()} onClick={() => setStep(2)}>Design your bank →</button></div>
-          </> : <>
-            <div className="setup-heading-v62 compact-heading">
-              <p className="eyebrow">02 / 02 · CREATE YOUR BANK</p>
-              <h1>Give the bank<br />an identity.</h1>
-              <p>Name the institution, create the bank mark and choose how forgiving the opening years should be.</p>
-            </div>
+          <div className="setup-action-v81"><div><small>SELECTED PROFILE</small><strong>{selectedBackground.title} founder</strong><span>{selectedBackground.advantage}</span></div><button className="primary" disabled={!draft.founderName.trim()} onClick={() => setStep(2)}>Continue to bank →</button></div>
+        </> : <>
+          <div className="setup-title-v81"><p className="eyebrow">STEP 2 OF 2 · BANK</p><h1>Name the institution.</h1><p>Set the identity and choose how forgiving the opening years should be.</p></div>
 
-            <div className="bank-identity-grid">
-              <label className="setup-field-v62"><span>Bank name</span><input value={draft.bankName} onChange={(event) => updateBankName(event.target.value)} placeholder="Bank name" /></label>
-              <label className="setup-field-v62 logo-field"><span>Bank mark</span><input maxLength={2} value={draft.bankLogo} onChange={(event) => { setLogoTouched(true); setDraft({ ...draft, bankLogo: event.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase() }); }} placeholder="BE" /></label>
-            </div>
+          <div className="identity-grid-v81"><label className="setup-input-v81"><span>Bank name</span><input value={draft.bankName} onChange={(event) => updateBankName(event.target.value)} placeholder="Bank name" /></label><label className="setup-input-v81 mark-input-v81"><span>Bank mark</span><input maxLength={2} value={draft.bankLogo} onChange={(event) => { setLogoTouched(true); setDraft({ ...draft, bankLogo: event.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase() }); }} placeholder="BE" /></label></div>
 
-            <div className="setup-section-label"><div><strong>Brand direction</strong><small>The palette changes the bank, interface and live preview.</small></div><span>Live</span></div>
-            <div className="brand-choice-grid">
-              {(["forest", "copper", "gold"] as BrandTheme[]).map((brand) => <button key={brand} className={cn("brand-choice-v62", brand, draft.brandTheme === brand && "selected")} onClick={() => setDraft({ ...draft, brandTheme: brand })}><i /><div><strong>{brandNames[brand].title}</strong><small>{brandNames[brand].description}</small></div>{draft.brandTheme === brand && <b>✓</b>}</button>)}
-            </div>
+          <div className="setup-section-v81"><div><strong>Brand direction</strong><small>This controls the interface palette.</small></div></div>
+          <div className="brand-grid-v81">{(["forest", "copper", "gold"] as BrandTheme[]).map((brand) => <button key={brand} className={cn("brand-card-v81", brand, draft.brandTheme === brand && "selected")} onClick={() => setDraft({ ...draft, brandTheme: brand })}><i /><div><strong>{brandNames[brand].title}</strong><small>{brandNames[brand].description}</small></div>{draft.brandTheme === brand && <b>✓</b>}</button>)}</div>
 
-            <div className="setup-section-label difficulty-label"><div><strong>Difficulty</strong><small>Difficulty currently changes the opening cash buffer. All management systems remain active.</small></div></div>
-            <div className="difficulty-choice-grid">
-              {difficulties.map((option) => <button key={option.key} className={cn("difficulty-choice", draft.difficulty === option.key && "selected")} onClick={() => setDraft({ ...draft, difficulty: option.key })}>
-                <div><strong>{option.title}</strong><b>{money.format(option.cash)}</b></div><p>{option.summary}</p><small>{option.pressure}</small>
-              </button>)}
-            </div>
+          <div className="setup-section-v81"><div><strong>Difficulty</strong><small>Changes the opening cash buffer, not the available systems.</small></div></div>
+          <div className="difficulty-grid-v81">{difficulties.map((option) => <button key={option.key} className={cn("difficulty-card-v81", draft.difficulty === option.key && "selected")} onClick={() => setDraft({ ...draft, difficulty: option.key })}><div><strong>{option.title}</strong><b>{money.format(option.cash)}</b></div><p>{option.summary}</p><small>{option.pressure}</small></button>)}</div>
 
-            <div className="opening-summary-card">
-              <div><small>READY TO OPEN</small><strong>{bankDisplay}</strong><p>{founderDisplay} will open a {draft.difficulty} local bank with an {selectedBackground.title.toLowerCase()} background.</p></div>
-              <div className="opening-summary-stats">{launchSummary.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}</div>
-            </div>
+          <div className="setup-actions-v81"><button className="secondary" onClick={() => setStep(1)}>← Back</button><button className="primary" disabled={!draft.bankName.trim() || !logoDisplay} onClick={start}>Open your bank →</button></div>
+        </>}
+      </div>
 
-            <div className="setup-actions-v62"><button className="secondary" onClick={() => setStep(1)}>← Back to founder</button><button className="primary open-bank-button" disabled={!draft.bankName.trim() || !logoDisplay} onClick={start}>Open your bank →</button></div>
-          </>}
-        </div>
-        <div className="setup-version-v7">Bank Empire v{APP_VERSION} · {APP_RELEASE_NAME}</div>
-      </section>
+      <aside className="setup-summary-v81">
+        <div className="summary-status-v81"><span><i /> LIVE CAMPAIGN SUMMARY</span><small>Updates instantly</small></div>
+        <div className="summary-bank-v81"><span>{logoDisplay}</span><div><small>FOUNDING APPLICATION</small><strong>{bankDisplay}</strong><p>{founderDisplay} · {selectedDifficulty.title} campaign</p></div></div>
 
-      <aside className="setup-live-preview">
-        <div className="preview-noise" />
-        <div className="preview-topline"><span><i /> LIVE BANK PREVIEW</span><small>v{APP_VERSION} · Changes update instantly</small></div>
+        <div className="summary-stats-v81">{launchSummary.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}</div>
 
-        <div className="preview-bank-identity">
-          <span className="preview-bank-logo">{logoDisplay}</span>
-          <div><small>FOUNDING APPLICATION</small><strong>{bankDisplay}</strong><p>{selectedBackground.title} founder · {selectedDifficulty.title} campaign</p></div>
-        </div>
+        <div className="summary-choice-v81"><small>YOUR OPENING EDGE</small><strong>{selectedBackground.title}</strong><p>{selectedBackground.advantage}.</p><span>{selectedBackground.tradeoff}.</span></div>
 
-        <div className="preview-city-v62">
-          <div className="preview-sky-glow" />
-          <div className="preview-road main-road" /><div className="preview-road cross-road" />
-          <div className="preview-district district-one"><span>HARBOUR</span></div><div className="preview-district district-two"><span>GARDEN</span></div><div className="preview-district district-three"><span>CENTRAL</span></div>
-          <div className="preview-building rival-building"><i /><i /><i /><small>RIVAL</small></div>
-          <div className="preview-building branch-building"><b>{logoDisplay}</b><i /><i /><i /><i /><strong>{bankDisplay}</strong></div>
-          <div className="preview-building office-building"><i /><i /><i /><i /><i /><i /></div>
-          <div className="preview-tree tree-a" /><div className="preview-tree tree-b" /><div className="preview-tree tree-c" />
-          <div className="preview-customer customer-a" /><div className="preview-customer customer-b" /><div className="preview-customer customer-c" />
-          <div className="preview-map-pin"><span>1</span><small>FIRST BRANCH</small></div>
-        </div>
+        <div className="summary-plan-v81"><small>FIRST 90 DAYS</small><ol><li><span>1</span><div><strong>Open the doors</strong><p>Review cash, products and the first branch.</p></div></li><li><span>2</span><div><strong>Build management</strong><p>Appoint executives and delegate routine work.</p></div></li><li><span>3</span><div><strong>Prepare expansion</strong><p>Reach a stable result before adding another branch.</p></div></li></ol></div>
 
-        <div className="preview-floating-card founder-card"><small>FOUNDER</small><strong>{founderDisplay}</strong><span>{selectedBackground.title} advantage active</span></div>
-        <div className="preview-floating-card capital-card"><small>OPENING CASH</small><strong>{money.format(selectedDifficulty.cash)}</strong><span>{selectedDifficulty.pressure}</span></div>
-
-        <div className="preview-storyline">
-          <small>YOUR BANKING STORY</small>
-          <div><span className="complete">1</span><strong>Create founder</strong><i /></div>
-          <div><span className={step === 2 ? "complete" : "current"}>2</span><strong>Design bank</strong><i /></div>
-          <div><span>3</span><strong>Choose strategy</strong><i /></div>
-          <div><span>4</span><strong>Open doors</strong></div>
-        </div>
-        <div className="preview-chapter"><small>CHAPTER ONE</small><strong>The licence arrives.</strong><p>Start with one branch, a small leadership team and a local market full of customers and rivals.</p></div>
+        <div className="summary-note-v81"><strong>This is a management game.</strong><p>You set strategy and approve major decisions. Managers operate the bank.</p></div>
       </aside>
-    </main>
-  );
+    </section>
+  </main>;
 }
