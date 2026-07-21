@@ -39,14 +39,17 @@ export function getBranchEconomics(state: GameState, branch: BranchOffice) {
   const requestedMarketing = branch.managerBudget ?? 0;
   const marketingCap = priority === "profitability" ? 10_000 : priority === "balanced" ? 25_000 : priority === "deposits" || priority === "business" ? 35_000 : 60_000;
   const marketing = Math.min(requestedMarketing, marketingCap);
-  const operations = 9_000 + branch.level * 4_000 + employees.length * 1_200;
+  const operations = 7_000 + branch.level * 3_500 + employees.length * 800;
   const cost = round(rent + payroll + marketing + operations);
   const customers = branch.localCustomers ?? Math.min(branch.capacity, 220 + branch.level * 85);
   const deposits = branch.localDeposits ?? 0;
   const loans = branch.localLoans ?? 0;
-  const feeIncome = customers * (branch.profile === "wealth" ? 155 : branch.profile === "business" ? 118 : 82);
-  const depositMargin = deposits * Math.max(.35, state.baseRate - state.depositRate + 1.15) / 100 / 12;
-  const lendingMargin = loans * Math.max(1.15, state.loanRate - state.baseRate) / 100 / 12;
+  const relationshipIncome = branch.profile === "wealth" ? 390 : branch.profile === "business" ? 315 : branch.profile === "mortgage" ? 245 : 220;
+  const productBreadth = 1 + Math.max(0, state.products.length - 1) * .065;
+  const serviceFactor = .72 + branch.satisfaction / 220;
+  const feeIncome = customers * relationshipIncome * productBreadth * serviceFactor;
+  const depositMargin = deposits * Math.max(.55, state.baseRate - state.depositRate + 1.25) / 100 / 12;
+  const lendingMargin = loans * Math.max(1.25, state.loanRate - state.baseRate) / 100 / 12;
   const revenue = round(feeIncome + depositMargin + lendingMargin);
   const profit = round(revenue - cost);
   return { employees, annualPayroll, payroll, rent, marketing, operations, cost, revenue, profit, customers, deposits, loans };
@@ -171,44 +174,26 @@ function runBranchLoanDesks(state: GameState): GameState {
 }
 
 function rebalanceBranchMonth(state: GameState): GameState {
-  let cashCorrection = 0;
-  let profitCorrection = 0;
-  let revenueCorrection = 0;
-  let expenseCorrection = 0;
   const summaries: string[] = [];
+  let totalBranchProfit = 0;
 
   const branchOffices = state.branchOffices.map((branch) => {
-    const oldRevenue = branch.lastMonthRevenue ?? 0;
-    const oldCost = branch.lastMonthCost ?? 0;
-    const oldProfit = branch.lastMonthProfit ?? 0;
     const economics = getBranchEconomics(state, branch);
-    cashCorrection += economics.profit - oldProfit;
-    profitCorrection += economics.profit - oldProfit;
-    revenueCorrection += economics.revenue - oldRevenue;
-    expenseCorrection += economics.cost - oldCost;
-    const customerChange = Math.round((branch.localCustomers ?? 0) - Math.min(branch.capacity, 220 + branch.level * 85));
+    totalBranchProfit += economics.profit;
     const manager = state.employeeRoster.find((employee) => employee.id === branch.managerId);
-    summaries.push(`${branch.name}: ${economics.profit >= 0 ? "+" : "-"}$${Math.abs(round(economics.profit / 1000))}k, ${economics.employees.length} staff, $${round(economics.marketing / 1000)}k marketing.`);
+    summaries.push(`${branch.name}: ${economics.profit >= 0 ? "+" : "−"}NOK ${Math.abs(round(economics.profit / 1000))}k, ${economics.employees.length} staff, NOK ${round(economics.marketing / 1000)}k marketing.`);
     return {
       ...branch,
       managerBudget: economics.marketing,
       lastMonthRevenue: economics.revenue,
       lastMonthCost: economics.cost,
       lastMonthProfit: economics.profit,
-      lifetimeProfit: (branch.lifetimeProfit ?? 0) + (economics.profit - oldProfit),
-      lastManagerAction: manager ? `${manager.name} closed the month with ${economics.employees.length} assigned staff, ${customerChange >= 0 ? "+" : ""}${customerChange} customers and ${economics.profit >= 0 ? "+" : "-"}$${Math.abs(round(economics.profit / 1000))}k result.` : "The branch has no accountable manager.",
+      lifetimeProfit: (branch.lifetimeProfit ?? 0) + economics.profit,
+      lastManagerAction: manager ? `${manager.name} closed the month with ${economics.employees.length} assigned staff, ${economics.customers} customers and ${economics.profit >= 0 ? "+" : "−"}NOK ${Math.abs(round(economics.profit / 1000))}k result.` : "The branch has no accountable manager.",
     };
   });
 
-  const next = {
-    ...state,
-    branchOffices,
-    cash: Math.max(0, state.cash + cashCorrection),
-    totalProfit: state.totalProfit + profitCorrection,
-    revenue: state.revenue + revenueCorrection / 30,
-    expenses: Math.max(0, state.expenses + expenseCorrection / 30),
-  };
-  return addEvent(next, createEvent(state.day, profitCorrection >= 0 ? "positive" : "neutral", "Branch economics reconciled", summaries.join(" ")));
+  return addEvent({ ...state, branchOffices }, createEvent(state.day, totalBranchProfit >= 0 ? "positive" : "neutral", "Branch economics reconciled", summaries.join(" ")));
 }
 
 export function prepareV84State(state: GameState): GameState {
