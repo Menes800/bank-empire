@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { advanceDaysV88, chooseDecisionV5, createCampaign, getMandateAssessmentV88, reputationDelta30 } from "./game/engine";
+import { chooseDecisionV5, createCampaign, reputationDelta30 } from "./game/engine";
+import { advanceDaysV89, getCreditAssessmentV89, getMandateAssessmentV89, reconcileManagementV89 } from "./game/v89/gameplay";
 import { clearGame, hasCheckpoint, loadGame, restoreCheckpoint, saveGame, type GameState } from "./game/store";
 import { DevPanel } from "./dev/DevPanel";
 import { DecisionModal, GameOverModal } from "./ui/Modals";
@@ -9,18 +10,18 @@ import { BankingPage } from "./ui/pages/BankingPage";
 import { CareerPage } from "./ui/pages/CareerPage";
 import { HoldingsPage } from "./ui/pages/HoldingsPage";
 import { MarketPage } from "./ui/pages/MarketPage";
-import { OverviewPage } from "./ui/pages/OverviewPage";
 import { RiskPage } from "./ui/pages/RiskPage";
 import { CampaignPage } from "./ui/v4/CampaignPage";
-import { ClientsPage } from "./ui/v4/ClientsPage";
-import { LeadershipPage } from "./ui/v4/LeadershipPage";
-import { NetworkPage } from "./ui/v4/NetworkPage";
 import { ReportsPage } from "./ui/v4/ReportsPage";
 import { HelpDrawer } from "./ui/v41/HelpDrawer";
 import { RiskForecastBar } from "./ui/v5/RiskForecastBar";
-import { InboxPage } from "./ui/v7/InboxPage";
 import { AttentionStrip } from "./ui/v8/AttentionStrip";
 import { ReputationPanel } from "./ui/v88/ReputationPanel";
+import { ClientsPageV89 } from "./ui/v89/ClientsPage";
+import { InboxPageV89 } from "./ui/v89/InboxPage";
+import { LeadershipPageV89 } from "./ui/v89/LeadershipPage";
+import { NetworkPageV89 } from "./ui/v89/NetworkPage";
+import { OverviewPageV89 } from "./ui/v89/OverviewPage";
 import { APP_RELEASE_NAME, APP_VERSION } from "./version";
 
 const pageDefinitions = {
@@ -45,7 +46,7 @@ function initials(value: string) {
 }
 
 export default function App() {
-  const [game, setGame] = useState<GameState>(() => loadGame());
+  const [game, setGame] = useState<GameState>(() => reconcileManagementV89(loadGame()));
   const [page, setPage] = useState<PageKey>("overview");
   const [dark, setDark] = useState(() => localStorage.getItem("bank-empire-theme") === "dark");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -70,27 +71,26 @@ export default function App() {
 
   if (!game.setupComplete) return <SetupScreen onStart={(draft: SetupDraft) => {
     localStorage.setItem("bank-empire-bank-mark", JSON.stringify({ bankName: draft.bankName, mark: draft.bankLogo }));
-    setGame(createCampaign(draft));
+    setGame(reconcileManagementV89(createCampaign(draft)));
   }} />;
 
-  const action = (fn: (state: GameState) => GameState) => setGame((current) => fn(current));
-  const advance = (days: number) => action((state) => advanceDaysV88(state, days));
+  const action = (fn: (state: GameState) => GameState) => setGame((current) => reconcileManagementV89(fn(current)));
+  const advance = (days: number) => setGame((current) => advanceDaysV89(current, days));
   const pageTitle = pageDefinitions[page].label;
   const restart = () => { localStorage.removeItem("bank-empire-bank-mark"); setGame(clearGame()); setPage("overview"); };
-  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(checkpoint); setPage("risk"); } };
+  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(reconcileManagementV89(checkpoint)); setPage("risk"); } };
   const navigate = (target: string) => { if (target in pageDefinitions && availablePages.has(target as PageKey)) setPage(target as PageKey); };
   const crisisOpen = Boolean(game.pendingDecision?.id.startsWith("v5-"));
   const nearestProject = game.projects.filter((project) => project.status !== "completed").sort((a, b) => a.remainingDays - b.remainingDays)[0];
   const bankMark = game.bankMark || initials(game.bankName);
-  const openInbox = game.ceoInbox.filter((task) => task.status === "open" && getMandateAssessmentV88(game, task).requiresCEO);
+  const openInbox = game.ceoInbox.filter((task) => task.status === "open" && getMandateAssessmentV89(game, task).requiresCEO);
   const criticalInbox = openInbox.filter((task) => task.urgency === "critical").length;
-  const creditBadge = game.loanApplications.length + game.collectionCases.filter((item) => !item.closed).length;
+  const creditBadge = game.loanApplications.filter((application) => getCreditAssessmentV89(game, application).requiresCEO).length + game.collectionCases.filter((item) => !item.closed).length;
   const reputationChange = reputationDelta30(game);
   const openDevFromVersion = () => setVersionClicks((count) => { const next = count + 1; if (next >= 5) { setDevOpen(true); return 0; } return next; });
-  const compactAttention = page !== "overview" && page !== "inbox";
 
-  return <div className="app app-v8 app-v82 app-v88" data-brand={game.brandTheme} data-page={page}>
-    <aside className="sidebar sidebar-v8 sidebar-v82 sidebar-v88">
+  return <div className="app app-v8 app-v82 app-v88 app-v89" data-brand={game.brandTheme} data-page={page}>
+    <aside className="sidebar sidebar-v8 sidebar-v82 sidebar-v88 sidebar-v89">
       <div className="logo logo-v7"><span>{bankMark}</span><div><strong>{game.bankName}</strong><small>{game.slogan || `${game.campaignStage} banking group`}</small></div></div>
       <nav className="grouped-navigation">{navigation.map((group) => {
         const groupPages = group.pages.filter((key) => availablePages.has(key));
@@ -104,24 +104,24 @@ export default function App() {
       <button className="sidebar-footer ceo-card-v88" onClick={() => setPage("career")}><div className="avatar">{game.founderName.slice(0, 1).toUpperCase()}</div><div><strong>{game.founderName}</strong><small>{careerTitles[game.careerLevel]}</small></div><b>CEO →</b></button>
     </aside>
 
-    <main className={`main-content main-content-v8 main-content-v82 main-content-v88 page-${page}`}>
-      <div className="sticky-command-header sticky-command-header-v82">
+    <main className={`main-content main-content-v8 main-content-v82 main-content-v88 main-content-v89 page-${page}`}>
+      <div className="sticky-command-header sticky-command-header-v82 sticky-command-header-v89">
         <div className="economy-ticker"><span className={`cycle-chip ${game.economicCycle}`}>{game.economicCycle}</span><span>Policy <b>{game.baseRate.toFixed(2)}%</b></span><span>Inflation <b>{game.inflation.toFixed(1)}%</b></span><span>GDP <b>{game.gdpGrowth.toFixed(1)}%</b></span><span>Confidence <b>{game.consumerConfidence.toFixed(0)}</b></span><span className={game.bankRunRisk > 35 ? "ticker-warning" : ""}>Run risk <b>{game.bankRunRisk.toFixed(0)}</b></span></div>
-        <header className="main-header main-header-v8 main-header-v82">
+        <header className="main-header main-header-v8 main-header-v82 main-header-v89">
           <div className="page-heading-v82"><p className="eyebrow">{game.campaignStage.toUpperCase()} · Y{game.year} Q{game.quarter} · WEEK {game.week} · DAY {game.day}</p><h1>{pageTitle}</h1></div>
-          <div className="header-actions"><button className="icon-button help-trigger" onClick={() => setHelpOpen(true)} title="Help">?</button><button className="icon-button" onClick={() => setDark((value) => !value)} title="Theme">{dark ? "☀" : "◐"}</button><button className="reputation-chip-v88" onClick={() => setReputationOpen(true)}><small>REPUTATION</small><strong>{game.reputation.toFixed(0)}</strong><span className={reputationChange >= 0 ? "positive" : "negative"}>{reputationChange >= 0 ? "+" : ""}{reputationChange.toFixed(1)} · 30d</span></button>{openInbox.length > 0 && <button className={`inbox-header-chip ${criticalInbox > 0 ? "critical" : ""}`} onClick={() => setPage("inbox")}><small>INBOX</small><strong>{openInbox.length}</strong><span>{criticalInbox > 0 ? `${criticalInbox} critical` : "open"}</span></button>}{nearestProject && <button className="nearest-project-chip" onClick={() => setPage("network")}><small>PROJECT</small><strong>{nearestProject.remainingDays} days</strong><span>{nearestProject.name}</span></button>}<button className="cash-pill" onClick={() => setPage("overview")}><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></button><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(30)}>+30 days →</button></div></div>
+          <div className="header-actions"><button className="icon-button help-trigger" onClick={() => setHelpOpen(true)} title="Help">?</button><button className="icon-button" onClick={() => setDark((value) => !value)} title="Theme">{dark ? "☀" : "◐"}</button><button className="reputation-chip-v88" onClick={() => setReputationOpen(true)}><small>REPUTATION</small><strong>{game.reputation.toFixed(0)}</strong><span className={reputationChange >= 0 ? "positive" : "negative"}>{reputationChange >= 0 ? "+" : ""}{reputationChange.toFixed(1)} · 30d</span></button>{openInbox.length > 0 && <button className={`inbox-header-chip ${criticalInbox > 0 ? "critical" : ""}`} onClick={() => setPage("inbox")}><small>CEO INBOX</small><strong>{openInbox.length}</strong><span>{criticalInbox > 0 ? `${criticalInbox} critical` : "authority needed"}</span></button>}{nearestProject && <button className="nearest-project-chip" onClick={() => setPage("network")}><small>PROJECT</small><strong>{nearestProject.remainingDays}d</strong><span>{nearestProject.name}</span></button>}<button className="cash-pill" onClick={() => setPage("overview")}><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></button><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(30)}>+30 days →</button></div></div>
         </header>
       </div>
 
-      <RiskForecastBar game={game} onOpenRisk={() => setPage("risk")} />
-      <AttentionStrip game={game} onNavigate={navigate} compact={compactAttention} />
-      {page === "overview" && <OverviewPage game={game} onOpenBoard={() => setPage("reports")} />}
-      {page === "inbox" && <InboxPage game={game} action={action} onNavigate={navigate} />}
+      {page === "risk" && <RiskForecastBar game={game} onOpenRisk={() => setPage("risk")} />}
+      {page === "overview" && <AttentionStrip game={game} onNavigate={navigate} compact />}
+      {page === "overview" && <OverviewPageV89 game={game} onOpenBoard={() => setPage("reports")} onOpenInbox={() => setPage("inbox")} />}
+      {page === "inbox" && <InboxPageV89 game={game} action={action} onNavigate={navigate} />}
       {page === "campaign" && <CampaignPage game={game} action={action} onNavigate={navigate} />}
-      {page === "network" && <NetworkPage game={game} action={action} />}
-      {page === "leadership" && <LeadershipPage game={game} action={action} />}
+      {page === "network" && <NetworkPageV89 game={game} action={action} />}
+      {page === "leadership" && <LeadershipPageV89 game={game} action={action} />}
       {page === "banking" && <BankingPage game={game} action={action} />}
-      {page === "clients" && <ClientsPage game={game} action={action} />}
+      {page === "clients" && <ClientsPageV89 game={game} action={action} />}
       {page === "reports" && <ReportsPage game={game} action={action} />}
       {page === "risk" && <RiskPage game={game} action={action} />}
       {page === "market" && <MarketPage game={game} />}
