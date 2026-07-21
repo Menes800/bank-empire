@@ -12,7 +12,6 @@ import { MarketPage } from "./ui/pages/MarketPage";
 import { OverviewPage } from "./ui/pages/OverviewPage";
 import { RiskPage } from "./ui/pages/RiskPage";
 import { CampaignPage } from "./ui/v4/CampaignPage";
-import { NetworkPage } from "./ui/v4/NetworkPage";
 import { HelpDrawer } from "./ui/v41/HelpDrawer";
 import { RiskForecastBar } from "./ui/v5/RiskForecastBar";
 import { AttentionStrip } from "./ui/v8/AttentionStrip";
@@ -20,6 +19,7 @@ import { BoardPage } from "./ui/v85/BoardPage";
 import { ExecutiveTeamPage } from "./ui/v85/ExecutiveTeamPage";
 import { ReportsPageV85 } from "./ui/v85/ReportsPageV85";
 import { WorkforcePageV85 } from "./ui/v85/WorkforcePageV85";
+import { BranchesPageV86 } from "./ui/v86/BranchesPageV86";
 import { CEOOwnershipPage } from "./ui/v86/CEOOwnershipPage";
 import { CreditControlPageV86 } from "./ui/v86/CreditControlPageV86";
 import { InboxPageV86 } from "./ui/v86/InboxPageV86";
@@ -163,7 +163,7 @@ export default function App() {
       {page === "overview" && <OverviewPage game={game} onOpenBoard={() => setPage("board")} />}
       {page === "inbox" && <InboxPageV86 game={game} action={action} onNavigate={navigate} />}
       {page === "campaign" && <CampaignPage game={game} action={action} onNavigate={navigate} />}
-      {page === "network" && <NetworkPage game={game} action={action} />}
+      {page === "network" && <BranchesPageV86 game={game} action={action} />}
       {page === "banking" && <BankingPage game={game} action={action} />}
       {page === "clients" && <CreditControlPageV86 game={game} action={action} />}
       {page === "executives" && <ExecutiveTeamPage game={game} action={action} />}
