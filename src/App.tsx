@@ -132,7 +132,7 @@ export default function App() {
 
       {page === "risk" && <RiskForecastBar game={game} onOpenRisk={() => setPage("risk")} />}
       {page === "overview" && <AttentionStrip game={game} onNavigate={navigate} compact />}
-      {page === "overview" && <OverviewPageV89 game={game} onOpenBoard={() => setPage("reports")} onOpenInbox={() => setPage("inbox")} />}
+      {page === "overview" && <OverviewPageV89 game={game} onOpenBoard={() => setPage("reports")} onOpenInbox={() => setPage("inbox")} onNavigate={navigate} />}
       {page === "inbox" && <InboxPageV89 game={game} action={action} onNavigate={navigate} />}
       {page === "campaign" && <CampaignPage game={game} action={action} onNavigate={navigate} />}
       {page === "network" && <NetworkPageV89 game={game} action={action} />}
