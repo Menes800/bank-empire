@@ -8,31 +8,17 @@ import {
   getWorkforceDepartments,
   hireCandidateToRole,
   setExecutiveMandatePreset,
-  setManagementControl,
   toggleExecutivePermission,
   updateExecutiveMandateLimits,
 } from "../../game/engine";
-import type { ExecutiveRole, GameState, ManagementArea, ManagementControlMode, MandatePreset } from "../../game/store";
+import type { ExecutiveRole, GameState, MandatePreset } from "../../game/store";
 import type { EmployeeProfile } from "../../game/types";
 import type { GameAction } from "../common";
 import { money } from "../format";
 
 const executiveRoles: ExecutiveRole[] = ["CFO", "COO", "CRO", "CMO", "CTO"];
-const modes: ManagementControlMode[] = ["automatic", "major", "manual"];
-const presets: Exclude<MandatePreset, "custom">[] = ["cautious", "balanced", "autonomous"];
-const managementAreas: { area: ManagementArea; title: string; role: ExecutiveRole; detail: string }[] = [
-  { area: "operations", title: "Branches & workforce", role: "COO", detail: "Branch managers, staffing, service capacity and operating projects." },
-  { area: "lending", title: "Credit & collections", role: "CRO", detail: "Routine lending, arrears, payment plans and collections." },
-  { area: "treasury", title: "Finance & treasury", role: "CFO", detail: "Liquidity, capital buffers, funding and normal balance-sheet actions." },
-  { area: "marketing", title: "Customers & competition", role: "CMO", detail: "Campaigns, segment pressure and routine competitor responses." },
-];
 const roleTitles: Record<ExecutiveRole, string> = {
   CFO: "Finance & Treasury", COO: "Operations & Branches", CRO: "Risk & Credit", CMO: "Customers & Growth", CTO: "Technology & Cyber",
-};
-const modeCopy: Record<ManagementControlMode, string> = {
-  automatic: "Management handles routine work and normal capacity decisions within budget.",
-  major: "Management acts normally but asks before material investments, hires or risk decisions.",
-  manual: "The area waits for CEO instructions and creates more inbox work.",
 };
 
 function employeeStatus(employee: EmployeeProfile) {
@@ -60,7 +46,7 @@ export function LeadershipPage({ game, action }: { game: GameState; action: Game
 
   return <>
     <section className="workforce-hero panel">
-      <div><p className="eyebrow">WORKFORCE</p><h2>Give leaders a real mandate, then hold them accountable.</h2><p>Executives handle approved work automatically. Their decisions arrive as reports instead of repetitive CEO approvals.</p></div>
+      <div><p className="eyebrow">WORKFORCE</p><h2>Give leaders real authority, then hold them accountable.</h2><p>Permissions, spending limits and risk limits now control what executives can actually do in the simulation. Actions above the mandate are escalated to the CEO.</p></div>
       <div className="workforce-health"><strong>{Math.round(averageWellbeing)}</strong><span>workforce wellbeing</span></div>
     </section>
 
@@ -71,12 +57,16 @@ export function LeadershipPage({ game, action }: { game: GameState; action: Game
     </section>
 
     <section className="panel executive-mandate-section-v88">
-      <div className="panel-heading"><div><p className="eyebrow">EXECUTIVE MANDATES</p><h3>One operating window for every executive</h3><p>Critical regulatory breaches, acquisitions, capital raises, executive dismissals and actions above the limit always stay with the CEO.</p></div><span className="status good">{executives.filter((item) => item.employee).length}/5 appointed</span></div>
+      <div className="panel-heading"><div><p className="eyebrow">EXECUTIVE MANDATES</p><h3>One operating window for every executive</h3><p>Every permission below is connected to gameplay. Actual spending, risk and outcomes are recorded here; critical strategic matters still stay with the CEO.</p></div><span className="status good">{executives.filter((item) => item.employee).length}/5 appointed</span></div>
       <div className="executive-mandate-grid-v88">{executives.map(({ role, employee }) => {
         const mandate = game.executiveMandates[role];
-        const logs = game.managementLog.filter((entry) => entry.role === role).slice(0, 3);
+        const recent = game.managementLog.filter((entry) => entry.role === role && entry.day >= game.day - 30);
+        const logs = recent.slice(0, 2);
+        const completed = recent.filter((entry) => entry.outcome !== "escalated").length;
+        const escalated = recent.filter((entry) => entry.outcome === "escalated").length;
         return <article key={role} className={employee ? "mandate-card-v88 filled" : "mandate-card-v88 vacant"}>
           <header><span>{role}</span><div><strong>{roleTitles[role]}</strong><small>{employee ? employee.name : `Appoint a ${role} to activate`}</small></div>{employee && <b>{executiveRoleFit(employee, role)}% fit</b>}</header>
+          <div className={`mandate-power-v889 ${employee ? "active" : "inactive"}`}><div><strong>{employee ? completed > 0 ? `${completed} actions in 30 days` : "Authority ready" : "No executive appointed"}</strong><small>{employee ? "Triggered only by real operational needs" : "This mandate cannot execute"}</small></div>{employee && <b className={escalated > 0 ? "warning" : "good"}>{escalated > 0 ? `${escalated} escalated` : "Within control"}</b>}</div>
           <label className="mandate-preset-v88"><span>Preset</span><select disabled={!employee} value={mandate.preset} onChange={(event) => { const value = event.target.value as MandatePreset; if (value !== "custom") action((state) => setExecutiveMandatePreset(state, role, value)); }}><option value="cautious">Cautious</option><option value="balanced">Balanced</option><option value="autonomous">Autonomous</option><option value="custom" disabled>Custom</option></select></label>
           <div className="mandate-permissions-v88">{MANDATE_PERMISSION_LABELS[role].map((permission) => <label key={permission.key}><input disabled={!employee} type="checkbox" checked={mandate.permissions.includes(permission.key)} onChange={() => action((state) => toggleExecutivePermission(state, role, permission.key))} /><span>{permission.label}</span></label>)}</div>
           <div className="mandate-limits-v88">
@@ -84,7 +74,7 @@ export function LeadershipPage({ game, action }: { game: GameState; action: Game
             <label><span>Risk limit</span><input disabled={!employee} type="range" min={0} max={100} value={mandate.riskLimit} onChange={(event) => action((state) => updateExecutiveMandateLimits(state, role, { riskLimit: Number(event.target.value) }))} /><small>{mandate.riskLimit.toFixed(0)}/100</small></label>
           </div>
           <details className="mandate-escalation-v88"><summary>Always to CEO · {mandate.alwaysEscalate.length}</summary>{mandate.alwaysEscalate.map((item) => <span key={item}>{item}</span>)}</details>
-          <div className="mandate-log-v88"><small>RECENT ACTIONS</small>{logs.length ? logs.map((log) => <div key={log.id}><strong>{log.title}</strong><span>{log.detail}</span>{log.amount !== undefined && <b>{money.format(log.amount)}</b>}</div>) : <p>No automatic actions reported yet.</p>}</div>
+          <div className="mandate-log-v88"><small>RECENT ACTIONS</small>{logs.length ? logs.map((log) => <div key={log.id}><strong>{log.title}</strong><span>{log.detail}</span><footer><em className={`mandate-outcome-v889 ${log.outcome}`}>{log.outcome}</em>{log.amount !== undefined && <b>{money.format(log.amount)}</b>}</footer></div>) : <p>No automatic actions reported yet.</p>}</div>
         </article>;
       })}</div>
     </section>
@@ -94,11 +84,6 @@ export function LeadershipPage({ game, action }: { game: GameState; action: Game
       <div className="department-table"><div className="department-table-head"><span>Department</span><span>Leader</span><span>Headcount</span><span>Workload</span><span>Performance</span><span>Wellbeing</span><span>Status</span></div>
         {departments.map((department) => <div key={department.department}><span><strong>{department.department}</strong><small>{department.leaderRole ? `${department.leaderRole} accountable` : "Executive team"}</small></span><span>{department.leader?.name ?? (department.leaderRole ? "Vacant" : game.founderName)}</span><span>{department.headcount}</span><span>{department.workload.toFixed(0)}%</span><span>{department.performance.toFixed(0)}</span><span>{department.wellbeing.toFixed(0)}</span><span><b className={`department-status ${department.status}`}>{department.status}</b></span></div>)}
       </div>
-    </section>
-
-    <section className="management-control-section panel">
-      <div className="panel-heading"><div><p className="eyebrow">LEGACY CONTROL LEVEL</p><h3>Broad fallback rules</h3><p>The detailed executive mandate above takes priority. These controls remain as broad operating defaults for existing saves.</p></div></div>
-      <div className="management-control-grid">{managementAreas.map(({ area, title, role, detail }) => { const executive = game.employeeRoster.find((employee) => employee.executiveRole === role); const current = game.managementControl[area]; return <article key={area}><div><span>{role}</span><section><strong>{title}</strong><small>{executive ? `Managed by ${executive.name}` : `Requires ${role}`}</small></section></div><p>{detail}</p><div className="three-mode-control">{modes.map((mode) => <button key={mode} disabled={!executive && mode !== "manual"} className={current === mode ? "selected" : ""} title={modeCopy[mode]} onClick={() => action((state) => setManagementControl(state, area, mode))}>{mode === "major" ? "Ask major" : mode}</button>)}</div><small className="mode-explanation">{modeCopy[current]}</small></article>; })}</div>
     </section>
 
     <section className="workforce-detail-layout">
