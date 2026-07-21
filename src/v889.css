@@ -13,6 +13,8 @@
 .main-content-v88 .inbox-layout,
 .main-content-v88 .workforce-detail-layout { align-items: start; }
 
+/* CEO Inbox only grows with its content. */
+.page-inbox > .attention-strip { display: none; }
 .inbox-command-card-v889 { padding: 19px 22px; border-radius: 15px; }
 .inbox-command-card-v889 h2 { font-size: clamp(23px, 2.4vw, 34px); }
 .inbox-layout-v889 { display: block; }
@@ -31,6 +33,7 @@
 .mandate-block-reason-v889 strong { margin-top: 3px; font-size: 8px; }
 .mandate-block-reason-v889 > span { padding: 5px 7px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); background: var(--surface); font-size: 6.5px; }
 
+/* Mandate cards display real authority and do not reserve decorative whitespace. */
 .executive-mandate-grid-v88 { grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: 12px; }
 .mandate-permissions-v88 { min-height: 0; }
 .mandate-power-v889 { margin-top: 9px; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--line); background: var(--surface-2); }
@@ -49,6 +52,7 @@
 .mandate-outcome-v889.reported { color: var(--positive); background: color-mix(in srgb, var(--positive) 9%, var(--surface)); }
 .mandate-outcome-v889.escalated { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 
+/* Overview alignment and compact attention. */
 .attention-strip-v889 { grid-template-columns: minmax(180px, .26fr) minmax(0, 1fr); }
 .attention-strip-v889 .attention-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
