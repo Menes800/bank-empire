@@ -1,0 +1,337 @@
+/* Bank Empire v0.8.3 — clean evolution pass
+   Preserve the v0.8.2 game and visual identity while making it calmer and easier to read. */
+
+.app-v83 {
+  grid-template-columns: 226px minmax(0, 1fr);
+}
+
+.sidebar-v83 {
+  padding: 17px 12px 14px;
+}
+
+.sidebar-v83 .logo {
+  padding-inline: 8px;
+  padding-bottom: 15px;
+}
+
+.sidebar-v83 .logo > span {
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+}
+
+.sidebar-v83 .logo strong {
+  font-size: 13px;
+}
+
+.sidebar-v83 .logo small,
+.sidebar-v83 .sidebar-footer small {
+  font-size: 10px;
+}
+
+.sidebar-v83 .nav-group {
+  margin-bottom: 11px;
+}
+
+.sidebar-v83 .nav-group > p {
+  margin-bottom: 6px;
+  font-size: 9px;
+}
+
+.sidebar-v83 .nav-item {
+  min-height: 38px;
+  padding: 8px 9px;
+  gap: 9px;
+  border-radius: 9px;
+}
+
+.sidebar-v83 .nav-item strong {
+  font-size: 12px;
+}
+
+.sidebar-v83 .nav-code {
+  width: 27px;
+  height: 25px;
+  font-size: 9px;
+}
+
+.sidebar-v83 .nav-badge {
+  min-width: 20px;
+  height: 20px;
+  font-size: 9px;
+}
+
+.sidebar-v83 .sidebar-footer strong {
+  font-size: 12px;
+}
+
+.main-content-v83 {
+  padding: 13px 22px 18px;
+}
+
+.main-content-v83 > section,
+.main-content-v83 > footer,
+.main-content-v83 > .content-grid,
+.main-content-v83 > .client-workspace,
+.main-content-v83 > nav,
+.main-content-v83 .sticky-command-header-v83 {
+  width: min(100%, 1440px);
+  max-width: 1440px;
+}
+
+.main-content-v83 .economy-ticker {
+  min-height: 29px;
+  padding: 5px 10px;
+  gap: 16px;
+  font-size: 10px;
+}
+
+.main-header-v83 {
+  min-height: 64px;
+  margin-bottom: 10px;
+}
+
+.main-header-v83 h1 {
+  font-size: clamp(28px, 2.2vw, 35px);
+}
+
+.main-header-v83 .header-actions {
+  gap: 8px;
+}
+
+.main-header-v83 .icon-button,
+.main-header-v83 .speed-controls button {
+  min-height: 38px;
+}
+
+.main-header-v83 .icon-button {
+  width: 38px;
+  height: 38px;
+}
+
+.main-header-v83 .cash-pill,
+.main-header-v83 .inbox-header-chip,
+.main-header-v83 .nearest-project-chip {
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
+.main-header-v83 .cash-pill small,
+.main-header-v83 .inbox-header-chip small,
+.main-header-v83 .nearest-project-chip small {
+  font-size: 9px;
+}
+
+.main-header-v83 .cash-pill strong,
+.main-header-v83 .inbox-header-chip strong,
+.main-header-v83 .nearest-project-chip strong {
+  font-size: 12px;
+}
+
+.main-header-v83 .inbox-header-chip span,
+.main-header-v83 .nearest-project-chip span {
+  font-size: 9px;
+}
+
+.main-header-v83 .speed-controls button {
+  padding: 8px 12px;
+  font-size: 11px;
+}
+
+/* A readable floor without turning the existing game into a new layout. */
+.main-content-v83 small {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.main-content-v83 p {
+  line-height: 1.55;
+}
+
+.main-content-v83 .eyebrow {
+  font-size: 9.5px;
+}
+
+.main-content-v83 .panel {
+  padding: 16px 18px;
+  border-radius: 13px;
+}
+
+.main-content-v83 .panel-heading {
+  margin-bottom: 12px;
+}
+
+.main-content-v83 .panel-heading h3 {
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.main-content-v83 .panel-heading p:not(.eyebrow) {
+  margin-top: 4px;
+  font-size: 11.5px;
+}
+
+.main-content-v83 .status {
+  padding: 6px 8px;
+  font-size: 9px;
+}
+
+.main-content-v83 .content-grid,
+.main-content-v83 .overview-grid,
+.main-content-v83 .overview-lower-grid {
+  gap: 12px;
+}
+
+.main-content-v83 .primary,
+.main-content-v83 .secondary,
+.main-content-v83 .danger-button {
+  padding: 10px 13px;
+  font-size: 11.5px;
+}
+
+.main-content-v83 .primary.small,
+.main-content-v83 .secondary.small,
+.main-content-v83 .danger-button.small {
+  padding: 8px 10px;
+  font-size: 10.5px;
+}
+
+.main-content-v83 .metric-card {
+  padding: 14px;
+}
+
+.main-content-v83 .metric-value {
+  font-size: 24px;
+}
+
+.main-content-v83 .hero-dashboard p:not(.eyebrow),
+.main-content-v83 .credit-command-centre-v82 p:not(.eyebrow) {
+  font-size: 11.5px;
+}
+
+.main-content-v83 .attention-items button strong,
+.main-content-v83 .attention-strip-compact > div > strong {
+  font-size: 11px;
+}
+
+.main-content-v83 .attention-items button small,
+.main-content-v83 .attention-strip-compact > div > small {
+  font-size: 10px;
+}
+
+.inbox-delegate-all {
+  margin-top: 13px;
+  border-color: rgba(255, 255, 255, 0.34) !important;
+  color: white !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.inbox-delegate-all:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Branch evolution: one additional control, still inside the existing v0.8 branch page. */
+.branch-marketing-control {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px 14px;
+  background: var(--surface-2);
+}
+
+.branch-marketing-control > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.branch-marketing-control > div:first-child small,
+.branch-marketing-control > p {
+  color: var(--muted);
+}
+
+.branch-marketing-control > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10.5px;
+}
+
+.branch-marketing-value {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+}
+
+.branch-marketing-value span {
+  color: var(--primary);
+  font-weight: 850;
+}
+
+.branch-marketing-control input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.branch-marketing-presets {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.branch-marketing-presets button {
+  min-height: 31px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.branch-marketing-presets button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.branch-status.building {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.main-content-v83 .branch-result-grid {
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+}
+
+@media (max-width: 1220px) {
+  .app-v83 {
+    grid-template-columns: 212px minmax(0, 1fr);
+  }
+
+  .main-content-v83 {
+    padding-inline: 16px;
+  }
+
+  .main-header-v83 .nearest-project-chip {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .main-content-v83 .economy-ticker {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .main-header-v83 {
+    align-items: flex-start;
+  }
+
+  .main-header-v83 .header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}

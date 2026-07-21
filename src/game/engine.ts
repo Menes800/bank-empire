@@ -15,6 +15,7 @@ export * from "./v5/gameplay";
 export * from "./v6/gameplay";
 export * from "./v7/gameplay";
 export * from "./v8/gameplay";
+export * from "./v83/gameplay";
 
 function enrichEmployee(employee: EmployeeProfile): EmployeeProfile {
   return {

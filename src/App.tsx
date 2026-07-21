@@ -1,25 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
-import { advanceDaysV8, chooseDecisionV5, createCampaign } from "./game/engine";
+import { chooseDecisionV5, createCampaign } from "./game/engine";
+import { requiresCEOApproval } from "./game/v86/gameplay";
+import { advanceDaysV87Final, prepareV87Final } from "./game/v87/final";
 import { clearGame, hasCheckpoint, loadGame, restoreCheckpoint, saveGame, type GameState } from "./game/store";
 import { DevPanel } from "./dev/DevPanel";
 import { DecisionModal, GameOverModal } from "./ui/Modals";
 import { SetupScreen, type SetupDraft } from "./ui/SetupScreen";
 import { money } from "./ui/format";
 import { BankingPage } from "./ui/pages/BankingPage";
-import { CareerPage } from "./ui/pages/CareerPage";
 import { HoldingsPage } from "./ui/pages/HoldingsPage";
 import { MarketPage } from "./ui/pages/MarketPage";
 import { OverviewPage } from "./ui/pages/OverviewPage";
 import { RiskPage } from "./ui/pages/RiskPage";
 import { CampaignPage } from "./ui/v4/CampaignPage";
-import { ClientsPage } from "./ui/v4/ClientsPage";
-import { LeadershipPage } from "./ui/v4/LeadershipPage";
-import { NetworkPage } from "./ui/v4/NetworkPage";
-import { ReportsPage } from "./ui/v4/ReportsPage";
 import { HelpDrawer } from "./ui/v41/HelpDrawer";
 import { RiskForecastBar } from "./ui/v5/RiskForecastBar";
-import { InboxPage } from "./ui/v7/InboxPage";
 import { AttentionStrip } from "./ui/v8/AttentionStrip";
+import { BoardPage } from "./ui/v85/BoardPage";
+import { ExecutiveTeamPage } from "./ui/v85/ExecutiveTeamPage";
+import { ReportsPageV85 } from "./ui/v85/ReportsPageV85";
+import { WorkforcePageV85 } from "./ui/v85/WorkforcePageV85";
+import { BranchesPageV86 } from "./ui/v86/BranchesPageV86";
+import { CEOOwnershipPage } from "./ui/v86/CEOOwnershipPage";
+import { CreditControlPageV86 } from "./ui/v86/CreditControlPageV86";
+import { InboxPageV86 } from "./ui/v86/InboxPageV86";
 import { APP_RELEASE_NAME, APP_VERSION } from "./version";
 
 const pageDefinitions = {
@@ -28,20 +32,31 @@ const pageDefinitions = {
   campaign: { label: "Strategy", icon: "ST" },
   network: { label: "Branches", icon: "BR" },
   banking: { label: "Products", icon: "PR" },
-  clients: { label: "Customers & Credit", icon: "CR" },
+  clients: { label: "Credit Control", icon: "CR" },
+  executives: { label: "Executive Team", icon: "EX" },
   leadership: { label: "Workforce", icon: "WF" },
   risk: { label: "Risk & Treasury", icon: "RT" },
+  board: { label: "Board", icon: "BD" },
   reports: { label: "Reports", icon: "RP" },
   market: { label: "Competition", icon: "MK" },
   holdings: { label: "Holdings", icon: "HD" },
-  career: { label: "Founder", icon: "FD" },
+  career: { label: "CEO & Ownership", icon: "CEO" },
 } as const;
+
+const branchTabs = [
+  { key: "overview", label: "Overview" },
+  { key: "employees", label: "Employees" },
+  { key: "loans", label: "Loans & customers" },
+  { key: "marketing", label: "Marketing" },
+  { key: "economy", label: "Economy" },
+] as const;
 
 type PageKey = keyof typeof pageDefinitions;
 type NavGroup = { label: string; pages: PageKey[] };
 const navigation: NavGroup[] = [
   { label: "BANK", pages: ["overview", "inbox", "campaign", "network", "banking", "clients"] },
-  { label: "MANAGEMENT", pages: ["leadership", "risk", "reports"] },
+  { label: "MANAGEMENT", pages: ["executives", "leadership", "risk"] },
+  { label: "GOVERNANCE", pages: ["board", "reports"] },
   { label: "GROUP", pages: ["market", "holdings", "career"] },
 ];
 const careerTitles = ["Local Founder", "Banking Executive", "Regional Director", "Group CEO", "Industry Leader"];
@@ -65,7 +80,7 @@ function storedBankMark(bankName: string) {
 }
 
 export default function App() {
-  const [game, setGame] = useState<GameState>(() => loadGame());
+  const [game, setGame] = useState<GameState>(() => prepareV87Final(loadGame()));
   const [page, setPage] = useState<PageKey>("overview");
   const [dark, setDark] = useState(() => localStorage.getItem("bank-empire-theme") === "dark");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -93,26 +108,29 @@ export default function App() {
 
   if (!game.setupComplete) return <SetupScreen onStart={(draft: SetupDraft) => {
     localStorage.setItem("bank-empire-bank-mark", JSON.stringify({ bankName: draft.bankName, mark: draft.bankLogo }));
-    setGame(createCampaign(draft));
+    setGame(prepareV87Final(createCampaign(draft)));
   }} />;
 
-  const action = (fn: (state: GameState) => GameState) => setGame((current) => fn(current));
-  const advance = (days: number) => action((state) => advanceDaysV8(state, days));
+  const action = (fn: (state: GameState) => GameState) => setGame((current) => prepareV87Final(fn(current)));
+  const advance = (days: number) => setGame((current) => advanceDaysV87Final(current, days));
   const pageTitle = pageDefinitions[page].label;
   const restart = () => { localStorage.removeItem("bank-empire-bank-mark"); setGame(clearGame()); setPage("overview"); };
-  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(checkpoint); setPage("risk"); } };
+  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(prepareV87Final(checkpoint)); setPage("risk"); } };
   const navigate = (target: string) => { if (target in pageDefinitions && availablePages.has(target as PageKey)) setPage(target as PageKey); };
+  const navigateBranchTab = (tab: string) => {
+    setPage("network");
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent("bank-empire-branch-tab", { detail: tab })), 0);
+  };
   const crisisOpen = Boolean(game.pendingDecision?.id.startsWith("v5-"));
   const nearestProject = game.projects.filter((project) => project.status !== "completed").sort((a, b) => a.remainingDays - b.remainingDays)[0];
   const bankMark = storedBankMark(game.bankName);
-  const openInbox = game.ceoInbox.filter((task) => task.status === "open");
+  const openInbox = game.ceoInbox.filter((task) => task.status === "open" && task.urgency !== "routine");
   const criticalInbox = openInbox.filter((task) => task.urgency === "critical").length;
-  const creditBadge = game.loanApplications.length + game.collectionCases.filter((item) => !item.closed).length;
+  const creditBadge = game.loanApplications.filter((application) => requiresCEOApproval(game, application)).length;
   const openDevFromVersion = () => setVersionClicks((count) => { const next = count + 1; if (next >= 5) { setDevOpen(true); return 0; } return next; });
-  const compactAttention = page !== "overview" && page !== "inbox";
 
-  return <div className="app app-v8 app-v82" data-brand={game.brandTheme} data-page={page}>
-    <aside className="sidebar sidebar-v8 sidebar-v82">
+  return <div className="app app-v8 app-v82 app-v83 app-v84 app-v85 app-v86 app-v87" data-brand={game.brandTheme} data-page={page}>
+    <aside className="sidebar sidebar-v8 sidebar-v82 sidebar-v83 sidebar-v84 sidebar-v85 sidebar-v86 sidebar-v87">
       <div className="logo logo-v7"><span>{bankMark}</span><div><strong>{game.bankName}</strong><small>{game.campaignStage} banking group</small></div></div>
       {game.devModeUsed && <div className="sidebar-dev-save">DEV SAVE</div>}
       <nav className="grouped-navigation">{navigation.map((group) => {
@@ -121,36 +139,41 @@ export default function App() {
         return <section className="nav-group" key={group.label}><p>{group.label}</p>{groupPages.map((key) => {
           const definition = pageDefinitions[key];
           const badge = key === "inbox" ? openInbox.length : key === "clients" ? creditBadge : 0;
-          return <button key={key} className={page === key ? "nav-item active" : "nav-item"} onClick={() => setPage(key)} title={definition.label}><span className="nav-code">{definition.icon}</span><strong>{definition.label}</strong>{badge > 0 && <b className={`nav-badge ${key === "inbox" && criticalInbox > 0 ? "critical" : ""}`}>{badge}</b>}{key === "network" && game.projects.some((project) => project.status === "delayed") && <b className="nav-alert">!</b>}</button>;
+          return <div className={`nav-page-block ${page === key ? "active" : ""}`} key={key}>
+            <button className={page === key ? "nav-item active" : "nav-item"} onClick={() => setPage(key)} title={definition.label}><span className="nav-code">{definition.icon}</span><strong>{definition.label}</strong>{badge > 0 && <b className={`nav-badge ${key === "inbox" && criticalInbox > 0 ? "critical" : ""}`}>{badge}</b>}{key === "network" && game.projects.some((project) => project.status === "delayed") && <b className="nav-alert">!</b>}</button>
+            {key === "network" && page === "network" && <div className="branch-subnav">{branchTabs.map((tab) => <button key={tab.key} onClick={() => navigateBranchTab(tab.key)}>{tab.label}</button>)}</div>}
+          </div>;
         })}</section>;
       })}</nav>
       <button className="sidebar-release" onClick={openDevFromVersion} title="Playtest tools: Ctrl + Shift + D"><span>v{APP_VERSION}</span><small>{APP_RELEASE_NAME}</small></button>
       <div className="sidebar-footer"><div className="avatar">{game.founderName.slice(0, 1).toUpperCase()}</div><div><strong>{game.founderName}</strong><small>{careerTitles[game.careerLevel]}</small></div></div>
     </aside>
 
-    <main className={`main-content main-content-v8 main-content-v82 page-${page}`}>
-      <div className="sticky-command-header sticky-command-header-v82">
+    <main className={`main-content main-content-v8 main-content-v82 main-content-v83 main-content-v84 main-content-v85 main-content-v86 main-content-v87 page-${page}`}>
+      <div className="sticky-command-header sticky-command-header-v82 sticky-command-header-v83">
         <div className="economy-ticker"><span className={`cycle-chip ${game.economicCycle}`}>{game.economicCycle}</span><span>Policy <b>{game.baseRate.toFixed(2)}%</b></span><span>Inflation <b>{game.inflation.toFixed(1)}%</b></span><span>GDP <b>{game.gdpGrowth.toFixed(1)}%</b></span><span>Confidence <b>{game.consumerConfidence.toFixed(0)}</b></span><span className={game.bankRunRisk > 35 ? "ticker-warning" : ""}>Run risk <b>{game.bankRunRisk.toFixed(0)}</b></span></div>
-        <header className="main-header main-header-v8 main-header-v82">
+        <header className="main-header main-header-v8 main-header-v82 main-header-v83">
           <div className="page-heading-v82"><p className="eyebrow">{game.campaignStage.toUpperCase()} · Y{game.year} Q{game.quarter} · WEEK {game.week} · DAY {game.day}</p><h1>{pageTitle}</h1></div>
           <div className="header-actions"><button className="icon-button help-trigger" onClick={() => setHelpOpen(true)} title="Help">?</button><button className="icon-button" onClick={() => setDark((value) => !value)} title="Theme">{dark ? "☀" : "◐"}</button>{openInbox.length > 0 && <button className={`inbox-header-chip ${criticalInbox > 0 ? "critical" : ""}`} onClick={() => setPage("inbox")}><small>INBOX</small><strong>{openInbox.length}</strong><span>{criticalInbox > 0 ? `${criticalInbox} critical` : "open"}</span></button>}{nearestProject && <button className="nearest-project-chip" onClick={() => setPage("network")}><small>PROJECT</small><strong>{nearestProject.remainingDays} days</strong><span>{nearestProject.name}</span></button>}<button className="cash-pill" onClick={() => setPage("overview")}><small>LIQUID CASH</small><strong>{money.format(game.cash)}</strong></button><div className="speed-controls"><button disabled={Boolean(game.pendingDecision || game.gameOverReason)} onClick={() => advance(1)}>+1 day</button><button disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(7)}>+1 week</button><button className="primary" disabled={Boolean(game.pendingDecision || game.gameOverReason || crisisOpen)} onClick={() => advance(30)}>+30 days →</button></div></div>
         </header>
       </div>
 
       <RiskForecastBar game={game} onOpenRisk={() => setPage("risk")} />
-      <AttentionStrip game={game} onNavigate={navigate} compact={compactAttention} />
+      {page === "overview" && <AttentionStrip game={game} onNavigate={navigate} />}
 
-      {page === "overview" && <OverviewPage game={game} onOpenBoard={() => setPage("reports")} />}
-      {page === "inbox" && <InboxPage game={game} action={action} onNavigate={navigate} />}
+      {page === "overview" && <OverviewPage game={game} onOpenBoard={() => setPage("board")} />}
+      {page === "inbox" && <InboxPageV86 game={game} action={action} onNavigate={navigate} />}
       {page === "campaign" && <CampaignPage game={game} action={action} onNavigate={navigate} />}
-      {page === "network" && <NetworkPage game={game} action={action} />}
-      {page === "leadership" && <LeadershipPage game={game} action={action} />}
+      {page === "network" && <BranchesPageV86 game={game} action={action} />}
       {page === "banking" && <BankingPage game={game} action={action} />}
-      {page === "clients" && <ClientsPage game={game} action={action} />}
-      {page === "reports" && <ReportsPage game={game} action={action} />}
+      {page === "clients" && <CreditControlPageV86 game={game} action={action} />}
+      {page === "executives" && <ExecutiveTeamPage game={game} action={action} />}
+      {page === "leadership" && <WorkforcePageV85 game={game} action={action} />}
       {page === "risk" && <RiskPage game={game} action={action} />}
+      {page === "board" && <BoardPage game={game} action={action} />}
+      {page === "reports" && <ReportsPageV85 game={game} action={action} />}
       {page === "market" && <MarketPage game={game} />}
-      {page === "career" && <CareerPage game={game} action={action} />}
+      {page === "career" && <CEOOwnershipPage game={game} action={action} />}
       {page === "holdings" && <HoldingsPage game={game} action={action} />}
 
       <footer className="game-footer"><span>{game.devModeUsed ? "DEV SAVE · " : ""}Autosaved locally · Bank Empire v{APP_VERSION}</span><button onClick={() => { if (window.confirm("Start a new campaign? Your current save will be removed.")) restart(); }}>New campaign</button></footer>

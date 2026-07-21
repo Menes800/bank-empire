@@ -5,17 +5,20 @@ import { cn, fullMoney, money } from "../format";
 
 export function OverviewPage({ game, onOpenBoard }: { game: GameState; onOpenBoard: () => void }) {
   const bankValue = game.cash + game.loans - game.deposits - game.wholesaleFunding;
-  const loanDepositRatio = (game.loans / Math.max(1, game.deposits)) * 100;
+  const hasDepositBase = game.deposits >= 1_000;
+  const loanDepositRatio = hasDepositBase ? (game.loans / game.deposits) * 100 : null;
   const capacity = game.employees * 72;
   const serviceLoad = (game.customers / Math.max(1, capacity)) * 100;
   const completed = game.objectives.filter((item) => item.completed).length;
   const active = game.objectives.filter((item) => !item.completed && !item.failed).length;
   const flow = getCashFlowSummary(game, 30);
   const netCashChange = flow.closingCash - flow.openingCash;
+  const bridgeChange = flow.depositInflows - flow.customerWithdrawals + flow.loanRepayments - flow.newLending + flow.operatingProfit + flow.fundingChange + flow.otherMovements;
+  const bridgeGap = netCashChange - bridgeChange;
   const outflows = [
     ["New loans issued", flow.newLending],
     ["Customer withdrawals", flow.customerWithdrawals],
-    ["Projects and other movements", Math.max(0, -flow.otherMovements)],
+    ["Projects, dividends & other", Math.max(0, -flow.otherMovements)],
     ["Operating loss", Math.max(0, -flow.operatingProfit)],
     ["Funding repayment", Math.max(0, -flow.fundingChange)],
   ] as const;
@@ -43,8 +46,8 @@ export function OverviewPage({ game, onOpenBoard }: { game: GameState; onOpenBoa
     </section>
 
     <section className="metrics-grid">
-      <Metric label="Deposits" value={money.format(game.deposits)} change={`${game.customersGained} gained · ${game.customersLost} lost today`} tone="good" />
-      <Metric label="Loan portfolio" value={money.format(game.loans)} change={`${loanDepositRatio.toFixed(0)}% L/D · ${game.nplRatio.toFixed(2)}% NPL`} tone={game.nplRatio > 5 ? "warn" : "default"} />
+      <Metric label="Deposits" value={money.format(game.deposits)} change={`${game.customersGained} gained · ${game.customersLost} lost today`} tone={hasDepositBase ? "good" : "warn"} />
+      <Metric label="Loan portfolio" value={money.format(game.loans)} change={`${loanDepositRatio === null ? "No deposit base" : `${loanDepositRatio.toFixed(0)}% L/D`} · ${game.nplRatio.toFixed(2)}% NPL`} tone={!hasDepositBase || game.nplRatio > 5 ? "warn" : "default"} />
       <Metric label="Daily profit" value={money.format(game.profit)} change={`${money.format(game.revenue)} revenue · ${money.format(game.expenses)} cost`} tone={game.profit >= 0 ? "good" : "warn"} />
       <Metric label="Customers" value={game.customers.toLocaleString("en-GB")} change={`${game.satisfaction.toFixed(0)} satisfaction · ${game.reputation.toFixed(0)} reputation`} tone="good" />
     </section>
@@ -52,12 +55,12 @@ export function OverviewPage({ game, onOpenBoard }: { game: GameState; onOpenBoa
     <section className="panel cash-movement-panel" id="cash-movement">
       <div className="panel-heading">
         <div><p className="eyebrow">LIQUID CASH EXPLAINED</p><h3>Where the cash went</h3><p>{cashExplanation}</p></div>
-        <div className={netCashChange >= 0 ? "cash-net positive" : "cash-net negative"}><small>Net cash change</small><strong>{flow.days ? money.format(netCashChange) : "No history"}</strong></div>
+        <div className="cash-heading-actions"><span className={Math.abs(bridgeGap) <= 2 ? "cash-bridge-check balanced" : "cash-bridge-check warning"}>{Math.abs(bridgeGap) <= 2 ? "Bridge balanced" : `${money.format(bridgeGap)} unexplained`}</span><div className={netCashChange >= 0 ? "cash-net positive" : "cash-net negative"}><small>Net cash change</small><strong>{flow.days ? money.format(netCashChange) : "No history"}</strong></div></div>
       </div>
       {flow.days === 0 ? <div className="empty-state">Cash movements will appear after the next simulated day.</div> : <div className="cash-flow-grid">
         <div className="cash-flow-column inflow"><h4>Cash coming in</h4><CashLine label="New deposits" value={flow.depositInflows} /><CashLine label="Loan repayments" value={flow.loanRepayments} /><CashLine label="Operating profit" value={Math.max(0, flow.operatingProfit)} /><CashLine label="New funding" value={Math.max(0, flow.fundingChange)} /></div>
         <div className="cash-flow-equation"><span><small>Opening cash</small><b>{money.format(flow.openingCash)}</b></span><strong>→</strong><span><small>Closing cash</small><b>{money.format(flow.closingCash)}</b></span></div>
-        <div className="cash-flow-column outflow"><h4>Cash going out</h4><CashLine label="New loans issued" value={flow.newLending} negative /><CashLine label="Customer withdrawals" value={flow.customerWithdrawals} negative /><CashLine label="Projects and other" value={Math.max(0, -flow.otherMovements)} negative /><CashLine label="Operating loss" value={Math.max(0, -flow.operatingProfit)} negative /></div>
+        <div className="cash-flow-column outflow"><h4>Cash going out</h4><CashLine label="New loans issued" value={flow.newLending} negative /><CashLine label="Customer withdrawals" value={flow.customerWithdrawals} negative /><CashLine label="Projects, dividends & other" value={Math.max(0, -flow.otherMovements)} negative /><CashLine label="Operating loss" value={Math.max(0, -flow.operatingProfit)} negative /><CashLine label="Funding repayment" value={Math.max(0, -flow.fundingChange)} negative /></div>
       </div>}
     </section>
 
