@@ -1,0 +1,388 @@
+/* Bank Empire v0.8.4 — branch operations without shrinking readable text */
+
+/* Larger onboarding on desktop screens. */
+.setup-shell.setup-v81 {
+  padding: 24px 32px 34px;
+}
+.setup-shell.setup-v81 .setup-header-v81,
+.setup-shell.setup-v81 .setup-frame-v81 {
+  width: min(1540px, calc(100vw - 64px));
+}
+.setup-shell.setup-v81 .setup-frame-v81 {
+  min-height: min(790px, calc(100vh - 118px));
+  grid-template-columns: minmax(0, 1fr) 430px;
+  margin-top: 20px;
+}
+.setup-shell.setup-v81 .setup-form-v81 {
+  padding: 48px 58px 42px;
+}
+.setup-shell.setup-v81 .setup-title-v81 h1 {
+  max-width: 900px;
+  font-size: clamp(46px, 4.6vw, 68px);
+}
+.setup-shell.setup-v81 .setup-title-v81 > p:not(.eyebrow) {
+  max-width: 820px;
+  font-size: 15px;
+}
+.setup-shell.setup-v81 .setup-input-v81 > span,
+.setup-shell.setup-v81 .setup-section-v81 strong,
+.setup-shell.setup-v81 .background-head-v81 strong,
+.setup-shell.setup-v81 .setup-action-v81 strong {
+  font-size: 13px;
+}
+.setup-shell.setup-v81 .setup-input-v81 input {
+  height: 60px;
+  font-size: 16px;
+}
+.setup-shell.setup-v81 .background-card-v81 {
+  min-height: 205px;
+  padding: 18px;
+}
+.setup-shell.setup-v81 .background-head-v81 small,
+.setup-shell.setup-v81 .choice-effect-v81,
+.setup-shell.setup-v81 .setup-section-v81 small,
+.setup-shell.setup-v81 .setup-action-v81 span,
+.setup-shell.setup-v81 .brand-card-v81 small,
+.setup-shell.setup-v81 .difficulty-card-v81 p,
+.setup-shell.setup-v81 .difficulty-card-v81 small {
+  font-size: 11px;
+}
+.setup-shell.setup-v81 .background-head-v81 > span {
+  width: 42px;
+  height: 42px;
+  font-size: 18px;
+}
+.setup-shell.setup-v81 .setup-action-v81,
+.setup-shell.setup-v81 .setup-actions-v81 {
+  margin-top: 20px;
+}
+.setup-shell.setup-v81 .setup-summary-v81 {
+  padding: 38px;
+}
+.setup-shell.setup-v81 .summary-bank-v81 strong {
+  font-size: 24px;
+}
+.setup-shell.setup-v81 .summary-stats-v81 span,
+.setup-shell.setup-v81 .summary-plan-v81 li {
+  padding: 14px;
+}
+
+/* Sidebar: same readable type, less strange empty spacing and no double active outline. */
+.sidebar-v84 {
+  width: auto;
+}
+.sidebar-v84 .grouped-navigation {
+  gap: 0;
+  padding-top: 8px;
+}
+.sidebar-v84 .nav-group {
+  margin-bottom: 7px;
+}
+.sidebar-v84 .nav-item {
+  min-height: 40px;
+  margin: 0;
+  border: 1px solid transparent;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+.sidebar-v84 .nav-item.active {
+  border-color: color-mix(in srgb, var(--primary) 42%, transparent);
+  background: color-mix(in srgb, var(--primary) 88%, white 12%);
+}
+.sidebar-v84 .nav-page-block {
+  margin-bottom: 3px;
+}
+.sidebar-v84 .sidebar-dev-save {
+  min-height: 28px;
+  margin: 8px 0 12px;
+  padding: 5px 8px;
+  font-size: 9px;
+  letter-spacing: .1em;
+  opacity: .72;
+}
+.sidebar-v84 .branch-subnav {
+  margin: 4px 0 7px 43px;
+  padding-left: 10px;
+  display: grid;
+  gap: 2px;
+  border-left: 1px solid rgba(255,255,255,.17);
+}
+.sidebar-v84 .branch-subnav button {
+  padding: 5px 0;
+  border: 0;
+  color: rgba(255,255,255,.72);
+  background: transparent;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 720;
+}
+.sidebar-v84 .branch-subnav button:hover {
+  color: white;
+}
+.sidebar-v84 .sidebar-release {
+  margin-top: auto;
+}
+
+/* Branch workspace */
+.branch-workspace-tabs {
+  margin-bottom: 12px;
+  padding: 6px !important;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+.branch-workspace-tabs button {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 820;
+}
+.branch-workspace-tabs button.selected {
+  border-color: var(--primary);
+  color: var(--text);
+  background: var(--primary-soft);
+}
+.branch-staff-workspace,
+.branch-marketing-workspace {
+  margin-bottom: 12px;
+}
+.branch-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.branch-staff-grid article {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+.branch-staff-grid article > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.branch-staff-grid article > div > span {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-weight: 900;
+}
+.branch-staff-grid article section {
+  display: flex;
+  flex-direction: column;
+}
+.branch-staff-grid article > b,
+.branch-staff-grid article > small {
+  display: block;
+  margin-top: 8px;
+}
+.branch-unassigned-pool {
+  margin-top: 14px;
+  padding-top: 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+}
+.branch-unassigned-pool button {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-weight: 760;
+}
+.branch-loan-layout,
+.branch-economy-layout {
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: 1.25fr .75fr;
+  gap: 12px;
+}
+.branch-application-list {
+  display: grid;
+  gap: 8px;
+}
+.branch-application-list article {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.branch-application-list article div {
+  display: flex;
+  flex-direction: column;
+}
+.branch-application-list article > span {
+  padding: 5px 8px;
+  border-radius: 99px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 10px;
+  font-weight: 800;
+}
+.branch-loan-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.branch-loan-summary > span,
+.branch-cost-lines > span {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--surface-2);
+}
+.branch-loan-note,
+.branch-economy-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+.branch-marketing-workspace > input[type="range"] {
+  width: 100%;
+  margin: 14px 0;
+}
+.branch-marketing-workspace .branch-marketing-presets {
+  grid-template-columns: repeat(4, 1fr);
+}
+.marketing-capacity-note {
+  margin-top: 14px;
+  padding: 14px;
+  border-left: 3px solid var(--primary);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.marketing-capacity-note p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.branch-cost-lines {
+  display: grid;
+  gap: 8px;
+}
+.branch-cost-lines > span {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.branch-cost-lines > span.total {
+  margin-top: 4px;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* Workforce */
+.workforce-filter-row {
+  margin-bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.workforce-filter-row button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 780;
+}
+.workforce-filter-row button.selected {
+  border-color: var(--primary);
+  color: var(--text);
+  background: var(--primary-soft);
+}
+.employee-roster-v84 .employee-roster-head,
+.employee-roster-v84 > button {
+  grid-template-columns: 1.35fr 1.15fr .65fr .65fr .65fr .8fr;
+}
+.employee-real-actions {
+  margin-top: 12px;
+  display: grid;
+  gap: 9px;
+}
+.employee-real-actions label {
+  padding: 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.employee-real-actions label span {
+  display: flex;
+  flex-direction: column;
+}
+.employee-real-actions select {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.all-roles-filled {
+  margin-top: 12px;
+  padding: 12px;
+  border-left: 3px solid var(--primary);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.all-roles-filled p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.organisation-chart-v84 .organisation-chart {
+  padding: 8px 0 0;
+}
+.organisation-chart-v84 .org-executives > div {
+  min-height: 66px;
+}
+
+@media (max-width: 1200px) {
+  .setup-shell.setup-v81 .setup-frame-v81 {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+  .branch-staff-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .branch-loan-layout,
+  .branch-economy-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .setup-shell.setup-v81 .setup-header-v81,
+  .setup-shell.setup-v81 .setup-frame-v81 {
+    width: 100%;
+  }
+  .setup-shell.setup-v81 .setup-frame-v81 {
+    grid-template-columns: 1fr;
+  }
+  .setup-shell.setup-v81 .setup-summary-v81 {
+    display: none;
+  }
+  .branch-workspace-tabs {
+    grid-template-columns: 1fr 1fr;
+  }
+  .branch-staff-grid {
+    grid-template-columns: 1fr;
+  }
+}
