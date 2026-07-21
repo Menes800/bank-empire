@@ -6,10 +6,10 @@ export const money = {
   format(value: number) {
     const sign = value < 0 ? "−" : "";
     const absolute = Math.abs(value);
-    if (absolute >= 1_000_000_000) return `${sign}$${number.format(absolute / 1_000_000_000)}bn`;
-    if (absolute >= 1_000_000) return `${sign}$${number.format(absolute / 1_000_000)}m`;
-    if (absolute >= 1_000) return `${sign}$${number.format(absolute / 1_000)}k`;
-    return `${sign}$${Math.round(absolute).toLocaleString("en-GB")}`;
+    if (absolute >= 1_000_000_000) return `${sign}NOK ${number.format(absolute / 1_000_000_000)}bn`;
+    if (absolute >= 1_000_000) return `${sign}NOK ${number.format(absolute / 1_000_000)}m`;
+    if (absolute >= 1_000) return `${sign}NOK ${number.format(absolute / 1_000)}k`;
+    return `${sign}NOK ${Math.round(absolute).toLocaleString("en-GB")}`;
   },
 };
 
@@ -17,7 +17,7 @@ export const fullMoney = {
   format(value: number) {
     const rounded = Math.round(value / 10_000) * 10_000;
     const sign = rounded < 0 ? "−" : "";
-    return `${sign}$${Math.abs(rounded).toLocaleString("en-GB")}`;
+    return `${sign}NOK ${Math.abs(rounded).toLocaleString("en-GB")}`;
   },
 };
 
