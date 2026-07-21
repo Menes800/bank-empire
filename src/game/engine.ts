@@ -19,6 +19,14 @@ export * from "./v7/gameplay";
 export * from "./v8/gameplay";
 export * from "./v88/gameplay";
 export * from "./v88/generation";
+export {
+  advanceDaysV889 as advanceDaysV88,
+  delegateInboxTaskV88,
+  getMandateAssessmentV88,
+  setExecutiveMandatePresetV889 as setExecutiveMandatePreset,
+  toggleExecutivePermissionV889 as toggleExecutivePermission,
+  updateExecutiveMandateLimitsV889 as updateExecutiveMandateLimits,
+} from "./v88/mandates";
 
 function enrichEmployee(employee: EmployeeProfile): EmployeeProfile {
   return {
