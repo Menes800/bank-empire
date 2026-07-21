@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { chooseDecisionV5, createCampaign } from "./game/engine";
-import { advanceDaysV86, prepareV86State, requiresCEOApproval } from "./game/v86/gameplay";
+import { requiresCEOApproval } from "./game/v86/gameplay";
+import { advanceDaysV87, prepareV87State } from "./game/v87/gameplay";
 import { clearGame, hasCheckpoint, loadGame, restoreCheckpoint, saveGame, type GameState } from "./game/store";
 import { DevPanel } from "./dev/DevPanel";
 import { DecisionModal, GameOverModal } from "./ui/Modals";
@@ -79,7 +80,7 @@ function storedBankMark(bankName: string) {
 }
 
 export default function App() {
-  const [game, setGame] = useState<GameState>(() => prepareV86State(loadGame()));
+  const [game, setGame] = useState<GameState>(() => prepareV87State(loadGame()));
   const [page, setPage] = useState<PageKey>("overview");
   const [dark, setDark] = useState(() => localStorage.getItem("bank-empire-theme") === "dark");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -107,14 +108,14 @@ export default function App() {
 
   if (!game.setupComplete) return <SetupScreen onStart={(draft: SetupDraft) => {
     localStorage.setItem("bank-empire-bank-mark", JSON.stringify({ bankName: draft.bankName, mark: draft.bankLogo }));
-    setGame(prepareV86State(createCampaign(draft)));
+    setGame(prepareV87State(createCampaign(draft)));
   }} />;
 
-  const action = (fn: (state: GameState) => GameState) => setGame((current) => prepareV86State(fn(current)));
-  const advance = (days: number) => setGame((current) => advanceDaysV86(current, days));
+  const action = (fn: (state: GameState) => GameState) => setGame((current) => prepareV87State(fn(current)));
+  const advance = (days: number) => setGame((current) => advanceDaysV87(current, days));
   const pageTitle = pageDefinitions[page].label;
   const restart = () => { localStorage.removeItem("bank-empire-bank-mark"); setGame(clearGame()); setPage("overview"); };
-  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(prepareV86State(checkpoint)); setPage("risk"); } };
+  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(prepareV87State(checkpoint)); setPage("risk"); } };
   const navigate = (target: string) => { if (target in pageDefinitions && availablePages.has(target as PageKey)) setPage(target as PageKey); };
   const navigateBranchTab = (tab: string) => {
     setPage("network");
@@ -128,8 +129,8 @@ export default function App() {
   const creditBadge = game.loanApplications.filter((application) => requiresCEOApproval(game, application)).length;
   const openDevFromVersion = () => setVersionClicks((count) => { const next = count + 1; if (next >= 5) { setDevOpen(true); return 0; } return next; });
 
-  return <div className="app app-v8 app-v82 app-v83 app-v84 app-v85 app-v86" data-brand={game.brandTheme} data-page={page}>
-    <aside className="sidebar sidebar-v8 sidebar-v82 sidebar-v83 sidebar-v84 sidebar-v85 sidebar-v86">
+  return <div className="app app-v8 app-v82 app-v83 app-v84 app-v85 app-v86 app-v87" data-brand={game.brandTheme} data-page={page}>
+    <aside className="sidebar sidebar-v8 sidebar-v82 sidebar-v83 sidebar-v84 sidebar-v85 sidebar-v86 sidebar-v87">
       <div className="logo logo-v7"><span>{bankMark}</span><div><strong>{game.bankName}</strong><small>{game.campaignStage} banking group</small></div></div>
       {game.devModeUsed && <div className="sidebar-dev-save">DEV SAVE</div>}
       <nav className="grouped-navigation">{navigation.map((group) => {
@@ -148,7 +149,7 @@ export default function App() {
       <div className="sidebar-footer"><div className="avatar">{game.founderName.slice(0, 1).toUpperCase()}</div><div><strong>{game.founderName}</strong><small>{careerTitles[game.careerLevel]}</small></div></div>
     </aside>
 
-    <main className={`main-content main-content-v8 main-content-v82 main-content-v83 main-content-v84 main-content-v85 main-content-v86 page-${page}`}>
+    <main className={`main-content main-content-v8 main-content-v82 main-content-v83 main-content-v84 main-content-v85 main-content-v86 main-content-v87 page-${page}`}>
       <div className="sticky-command-header sticky-command-header-v82 sticky-command-header-v83">
         <div className="economy-ticker"><span className={`cycle-chip ${game.economicCycle}`}>{game.economicCycle}</span><span>Policy <b>{game.baseRate.toFixed(2)}%</b></span><span>Inflation <b>{game.inflation.toFixed(1)}%</b></span><span>GDP <b>{game.gdpGrowth.toFixed(1)}%</b></span><span>Confidence <b>{game.consumerConfidence.toFixed(0)}</b></span><span className={game.bankRunRisk > 35 ? "ticker-warning" : ""}>Run risk <b>{game.bankRunRisk.toFixed(0)}</b></span></div>
         <header className="main-header main-header-v8 main-header-v82 main-header-v83">
