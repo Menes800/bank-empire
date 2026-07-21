@@ -1,4 +1,5 @@
-import { approveLoanRefined, counterLoanRefined, declineLoanRefined, getCreditRecommendation, startBranchUpgrade, startStrategicProject } from "../v4/gameplay";
+import { approveLoanRefined, counterLoanRefined, declineLoanRefined, startBranchUpgrade, startStrategicProject } from "../v4/gameplay";
+import { getCreditRecommendation } from "../v6/gameplay";
 import type { BankProject, BranchOffice, ExecutivePermission, ExecutiveRole, GameState, LoanApplication, ManagementLogEntry, ProjectKind } from "../types";
 import { clamp, round } from "../utils";
 import { advanceDaysV889, delegateInboxTaskV88, getMandateAssessmentV88 } from "../v88/mandates";
