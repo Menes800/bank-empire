@@ -199,6 +199,7 @@ export type {
   LendingPolicy,
   ManagementArea,
   ManagementControlMode,
+  ManagementLogEntry,
   MandatePreset,
   NameStyle,
   ProductKey,
