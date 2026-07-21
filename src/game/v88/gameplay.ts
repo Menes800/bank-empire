@@ -59,7 +59,7 @@ export function updateExecutiveMandateLimits(state: GameState, role: ExecutiveRo
 
 function stageRequirements(stage: CampaignStage, state: GameState): string[] {
   if (stage === "startup") return [];
-  const targets = {
+  const targets: { customers: number; branches: number; reputation?: number; digital?: number; marketShare?: number } = {
     regional: { customers: 1_200, branches: 2, reputation: 55 },
     national: { customers: 4_000, branches: 3, digital: 58 },
     group: { customers: 12_000, branches: 5, reputation: 72 },
@@ -68,9 +68,9 @@ function stageRequirements(stage: CampaignStage, state: GameState): string[] {
   const reasons: string[] = [];
   if (state.customers < targets.customers) reasons.push(`${targets.customers.toLocaleString("en-GB")} customers (${state.customers.toLocaleString("en-GB")} now)`);
   if (state.branchOffices.length < targets.branches) reasons.push(`${targets.branches} operating branches (${state.branchOffices.length} now)`);
-  if ("reputation" in targets && state.reputation < targets.reputation) reasons.push(`Reputation ${targets.reputation} (${state.reputation.toFixed(0)} now)`);
-  if ("digital" in targets && state.digitalLevel < targets.digital) reasons.push(`Digital level ${targets.digital} (${state.digitalLevel.toFixed(0)} now)`);
-  if ("marketShare" in targets && state.marketShare < targets.marketShare) reasons.push(`Market share ${targets.marketShare}% (${state.marketShare.toFixed(1)}% now)`);
+  if (targets.reputation !== undefined && state.reputation < targets.reputation) reasons.push(`Reputation ${targets.reputation} (${state.reputation.toFixed(0)} now)`);
+  if (targets.digital !== undefined && state.digitalLevel < targets.digital) reasons.push(`Digital level ${targets.digital} (${state.digitalLevel.toFixed(0)} now)`);
+  if (targets.marketShare !== undefined && state.marketShare < targets.marketShare) reasons.push(`Market share ${targets.marketShare}% (${state.marketShare.toFixed(1)}% now)`);
   return reasons;
 }
 
