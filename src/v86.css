@@ -1,0 +1,376 @@
+.app-v86 .main-content-v86 {
+  min-width: 0;
+}
+
+.app-v86 .sidebar-v86 .nav-code {
+  min-width: 42px;
+  width: 42px;
+  padding-inline: 4px;
+  font-size: 12px;
+}
+
+.network-command-v86,
+.ceo-ownership-hero,
+.ceo-priority-v86,
+.credit-command-v86 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.network-command-v86 {
+  padding: 22px 24px;
+}
+
+.network-command-v86 h2,
+.ceo-ownership-hero h2,
+.ceo-priority-v86 h3 {
+  margin: 4px 0 6px;
+}
+
+.network-kpi-v86 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.active-delivery-v86 {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 20px;
+}
+
+.active-delivery-v86 span {
+  flex: 1;
+}
+
+.branch-overview-v86 {
+  overflow: visible;
+}
+
+.app-v86 .branch-overview-table,
+.app-v86 .branch-overview-table > button {
+  overflow: visible;
+}
+
+.app-v86 .branch-overview-table > button > span:last-child {
+  position: static;
+  overflow: visible;
+  min-width: 138px;
+}
+
+.app-v86 .branch-status-v86 {
+  position: static !important;
+  inset: auto !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 10px !important;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.15;
+  box-shadow: none !important;
+}
+
+.branch-overview-workspace-v86 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, .75fr);
+  gap: 14px;
+}
+
+.branch-owner-summary-v86 {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.branch-owner-rules-v86 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.branch-owner-rules-v86 span,
+.ceo-ownership-kpis span,
+.ownership-metrics-v86 span {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.branch-guardrails-drawer-v86 {
+  margin-top: 12px;
+}
+
+.branch-guardrail-grid-v86 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.branch-guardrail-grid-v86 label {
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.branch-guardrail-grid-v86 label > span {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.branch-guardrail-grid-v86 select {
+  min-width: 230px;
+}
+
+.branch-guardrail-grid-v86 input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+}
+
+.credit-authority-grid-v86 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.credit-authority-grid-v86 article {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+
+.credit-authority-grid-v86 article strong,
+.credit-authority-grid-v86 article small {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.material-exceptions-v86 {
+  min-height: 260px;
+}
+
+.inbox-main-v86 {
+  min-height: 310px;
+}
+
+.accountable-owner-v86 {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 0 58px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+
+.accountable-owner-v86 strong {
+  color: var(--accent);
+}
+
+.handled-task-grid-v86 article p {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.ceo-identity-v86 {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.ceo-identity-v86 > span {
+  width: 74px;
+  height: 74px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: white;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.ceo-ownership-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(135px, 1fr));
+  gap: 8px;
+}
+
+.ceo-priority-grid-v86 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ceo-priority-grid-v86 button {
+  text-align: left;
+  min-height: 112px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel-soft);
+}
+
+.ceo-priority-grid-v86 button.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.ceo-priority-grid-v86 strong,
+.ceo-priority-grid-v86 small {
+  display: block;
+}
+
+.ceo-priority-grid-v86 small {
+  margin-top: 7px;
+  line-height: 1.4;
+}
+
+.ceo-ownership-layout-v86 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ownership-metrics-v86 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.ownership-card-v86 > button small {
+  display: block;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.future-ownership-v86 {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.future-ownership-v86 span {
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  opacity: .72;
+}
+
+.future-ownership-v86 strong,
+.future-ownership-v86 small {
+  display: block;
+}
+
+.development-track-list-v86 {
+  display: grid;
+  gap: 10px;
+}
+
+.development-track-list-v86 article {
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.development-track-list-v86 article > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.development-track-list-v86 p {
+  margin: 6px 0 10px;
+}
+
+.milestone-timeline-v86 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.milestone-timeline-v86 article {
+  min-height: 94px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  background: var(--panel-soft);
+}
+
+.milestone-timeline-v86 article > span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.milestone-timeline-v86 article.locked {
+  opacity: .55;
+}
+
+.milestone-timeline-v86 strong,
+.milestone-timeline-v86 small {
+  display: block;
+}
+
+@media (max-width: 1250px) {
+  .ceo-ownership-kpis,
+  .ceo-priority-grid-v86 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .milestone-timeline-v86 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .network-command-v86,
+  .ceo-ownership-hero,
+  .ceo-priority-v86,
+  .credit-command-v86 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .network-kpi-v86,
+  .branch-overview-workspace-v86,
+  .ceo-ownership-layout-v86,
+  .credit-authority-grid-v86,
+  .branch-guardrail-grid-v86 {
+    grid-template-columns: 1fr;
+  }
+  .branch-guardrail-grid-v86 label {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .branch-guardrail-grid-v86 select {
+    width: 100%;
+    min-width: 0;
+  }
+}
