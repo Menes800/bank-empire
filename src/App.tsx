@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { advanceDaysV88, chooseDecisionV5, createCampaign, reputationDelta30 } from "./game/engine";
+import { advanceDaysV88, chooseDecisionV5, createCampaign, getMandateAssessmentV88, reputationDelta30 } from "./game/engine";
 import { clearGame, hasCheckpoint, loadGame, restoreCheckpoint, saveGame, type GameState } from "./game/store";
 import { DevPanel } from "./dev/DevPanel";
 import { DecisionModal, GameOverModal } from "./ui/Modals";
@@ -82,7 +82,7 @@ export default function App() {
   const crisisOpen = Boolean(game.pendingDecision?.id.startsWith("v5-"));
   const nearestProject = game.projects.filter((project) => project.status !== "completed").sort((a, b) => a.remainingDays - b.remainingDays)[0];
   const bankMark = game.bankMark || initials(game.bankName);
-  const openInbox = game.ceoInbox.filter((task) => task.status === "open");
+  const openInbox = game.ceoInbox.filter((task) => task.status === "open" && getMandateAssessmentV88(game, task).requiresCEO);
   const criticalInbox = openInbox.filter((task) => task.urgency === "critical").length;
   const creditBadge = game.loanApplications.length + game.collectionCases.filter((item) => !item.closed).length;
   const reputationChange = reputationDelta30(game);
