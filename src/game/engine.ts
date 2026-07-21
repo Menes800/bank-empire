@@ -17,7 +17,14 @@ export * from "./v5/gameplay";
 export * from "./v6/gameplay";
 export * from "./v7/gameplay";
 export * from "./v8/gameplay";
-export * from "./v88/gameplay";
+export {
+  MANDATE_PERMISSION_LABELS,
+  defaultExecutiveMandates,
+  getExpansionAssessmentV88,
+  startBranchProjectV88,
+  repairCampaignState,
+  reputationDelta30,
+} from "./v88/gameplay";
 export * from "./v88/generation";
 export {
   advanceDaysV889 as advanceDaysV88,
