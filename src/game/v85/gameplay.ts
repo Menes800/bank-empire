@@ -2,7 +2,7 @@ import { chooseDecisionV5 } from "../v5/gameplay";
 import { delegateInboxTask } from "../v7/gameplay";
 import { advanceDaysV84Final } from "../v84/advance";
 import { prepareV84State } from "../v84/gameplay";
-import type { CEOInboxTask, ExecutiveRole, GameState } from "../types";
+import type { CEOInboxTask, ExecutiveRole, GameState, LoanApplication } from "../types";
 import { addEvent, clamp, createEvent } from "../utils";
 
 export type ExecutiveDevelopmentFocus = "leadership" | "specialist" | "recovery";
@@ -93,6 +93,20 @@ function collapseDuplicateOpenTasks(tasks: CEOInboxTask[]) {
     : task);
 }
 
+function normaliseLoanApplications(state: GameState): GameState {
+  const strongestByCustomer = new Map<string, LoanApplication>();
+  const riskWeight = { A: 1, B: 2, C: 3, D: 4 } as const;
+  for (const application of state.loanApplications) {
+    const key = application.customerName.trim().toLowerCase();
+    const current = strongestByCustomer.get(key);
+    const score = application.amount * (1 + riskWeight[application.riskGrade] * .08);
+    const currentScore = current ? current.amount * (1 + riskWeight[current.riskGrade] * .08) : -1;
+    if (!current || score > currentScore) strongestByCustomer.set(key, application);
+  }
+  const loanApplications = [...strongestByCustomer.values()];
+  return loanApplications.length === state.loanApplications.length ? state : { ...state, loanApplications };
+}
+
 function normaliseCEOInbox(state: GameState): GameState {
   const coo = state.employeeRoster.find((employee) => employee.executiveRole === "COO");
   const cro = state.employeeRoster.find((employee) => employee.executiveRole === "CRO");
@@ -101,7 +115,7 @@ function normaliseCEOInbox(state: GameState): GameState {
   const cleaned = collapseDuplicateOpenTasks(state.ceoInbox)
     .filter((task) => task.urgency !== "routine")
     .map((original) => {
-      let task = updateBranchMatterCopy(state, original);
+      const task = updateBranchMatterCopy(state, original);
       if (task.status !== "open") return task;
 
       if (task.category === "market" && task.urgency !== "critical") {
@@ -155,7 +169,8 @@ function routeRoutineRegulatoryWork(state: GameState): GameState {
 }
 
 export function prepareV85State(state: GameState): GameState {
-  return normaliseCEOInbox(routeRoutineRegulatoryWork(prepareV84State(state)));
+  const prepared = normaliseLoanApplications(prepareV84State(state));
+  return normaliseCEOInbox(routeRoutineRegulatoryWork(prepared));
 }
 
 export function advanceDaysV85(state: GameState, days: number): GameState {
