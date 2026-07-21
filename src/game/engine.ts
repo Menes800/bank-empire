@@ -4,6 +4,8 @@ import type { CampaignInput, EmployeeProfile, GameState } from "./types";
 import { addEvent, createEvent, historyPoint } from "./utils";
 import { initialV4Fields } from "./v4/catalog";
 import { employeeDepartment } from "./v8/gameplay";
+import { defaultExecutiveMandates } from "./v88/gameplay";
+import { generateCandidateMarket, generatedCompetitors } from "./v88/generation";
 
 export { PRODUCT_CATALOG } from "./catalog";
 export * from "./simulation";
@@ -15,6 +17,8 @@ export * from "./v5/gameplay";
 export * from "./v6/gameplay";
 export * from "./v7/gameplay";
 export * from "./v8/gameplay";
+export * from "./v88/gameplay";
+export * from "./v88/generation";
 
 function enrichEmployee(employee: EmployeeProfile): EmployeeProfile {
   return {
@@ -26,19 +30,41 @@ function enrichEmployee(employee: EmployeeProfile): EmployeeProfile {
     wellbeing: employee.wellbeing ?? employee.energy,
     potential: employee.potential ?? Math.min(95, employee.skill + 9),
     tenureMonths: employee.tenureMonths ?? 1,
+    nationality: employee.nationality ?? "NO",
+    leadershipStyle: employee.leadershipStyle ?? "Practical",
+    strengths: employee.strengths ?? [employee.trait],
+    weaknesses: employee.weaknesses ?? ["Limited track record in this bank"],
+    workHistory: employee.workHistory ?? [employee.role],
+    ceoRelationship: employee.ceoRelationship ?? 50,
+    boardRelationship: employee.boardRelationship ?? 50,
+    peerRelationship: employee.peerRelationship ?? 55,
+    quitRisk: employee.quitRisk ?? Math.max(5, 55 - employee.loyalty),
+    ambition: employee.ambition ?? Math.min(95, employee.leadership + 8),
+    strategyOpinion: employee.strategyOpinion ?? "Build the bank with disciplined growth.",
+    decisionHistory: employee.decisionHistory ?? [],
+    availableUntilDay: employee.availableUntilDay,
   };
 }
 
 export function emptyGame(): GameState {
   const v4 = initialV4Fields();
   const base: GameState = {
-    version: 8,
+    version: 88,
     setupComplete: false,
     founderName: "",
     background: "Operations",
     bankName: "Nordic Trust",
+    bankMark: "NT",
+    slogan: "Built for lasting trust.",
+    firstBranchName: "Harbour Central",
+    founderStory: "Built from one branch, disciplined growth and clear accountability.",
     brandTheme: "forest",
     difficulty: "balanced",
+    currency: "NOK",
+    homeMarket: "NO",
+    locale: "nb-NO",
+    nameStyle: "mixed",
+    worldSeed: 880001,
     day: 1,
     week: 1,
     quarter: 1,
@@ -99,13 +125,15 @@ export function emptyGame(): GameState {
     events: [],
     gameOverReason: null,
     ...v4,
-    branchOffices: v4.branchOffices.map((branch) => ({ ...branch, managerControl: true, operatingPriority: "balanced", upgradeAuthority: "profitable", pendingUpgradeRecommendation: false })),
+    branchOffices: v4.branchOffices.map((branch, index) => ({ ...branch, name: index === 0 ? "Harbour Central" : branch.name, managerControl: true, operatingPriority: "balanced", upgradeAuthority: "profitable", pendingUpgradeRecommendation: false })),
     employeeRoster: v4.employeeRoster.map(enrichEmployee),
     candidatePool: v4.candidatePool.map(enrichEmployee),
     collectionCases: [],
     ceoInbox: [],
     competitorMoves: [],
     managementControl: { treasury: "major", lending: "major", marketing: "major", operations: "automatic" },
+    executiveMandates: defaultExecutiveMandates(),
+    managementLog: [],
     devModeUsed: false,
     bankruptcyProtection: false,
   };
@@ -114,7 +142,17 @@ export function emptyGame(): GameState {
 
 export function createCampaign(input: CampaignInput): GameState {
   const difficultyCash = input.difficulty === "relaxed" ? 10_000_000 : input.difficulty === "hard" ? 6_500_000 : 8_000_000;
-  let state: GameState = { ...emptyGame(), ...input, setupComplete: true, cash: difficultyCash, version: 8 };
+  let state: GameState = {
+    ...emptyGame(),
+    ...input,
+    bankMark: input.bankLogo?.slice(0, 2).toUpperCase() || input.bankName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+    setupComplete: true,
+    cash: difficultyCash,
+    version: 88,
+    competitors: generatedCompetitors(input.worldSeed, input.homeMarket, initialCompetitors()),
+    candidatePool: generateCandidateMarket(input.worldSeed, input.homeMarket, input.nameStyle, 1, 18).map(enrichEmployee),
+    branchOffices: emptyGame().branchOffices.map((branch, index) => index === 0 ? { ...branch, name: input.firstBranchName } : branch),
+  };
 
   if (input.background === "Finance") {
     state = {
@@ -151,5 +189,5 @@ export function createCampaign(input: CampaignInput): GameState {
   }
 
   state = { ...state, objectives: createObjectives(state, 1), history: [historyPoint(state)] };
-  return addEvent(state, createEvent(1, "positive", "Your bank is open", `${input.bankName} has received its banking licence and welcomed its first customers.`));
+  return addEvent(state, createEvent(1, "positive", "Your bank is open", `${input.bankName} has received its banking licence and welcomed its first customers at ${input.firstBranchName}.`));
 }
