@@ -29,6 +29,7 @@ const pageDefinitions = {
 } as const;
 
 type PageKey = keyof typeof pageDefinitions;
+type LayoutMode = "wide" | "desktop" | "split" | "narrow";
 type NavGroup = { key: "bank" | "management" | "group"; label: string; pages: PageKey[] };
 const navigation: NavGroup[] = [
   { key: "bank", label: "BANK", pages: ["overview", "inbox", "campaign", "network", "banking", "clients"] },
@@ -48,6 +49,7 @@ function initials(value: string) {
 export default function App() {
   const [game, setGame] = useState<GameState>(() => reconcileManagementV89(loadGame()));
   const [page, setPage] = useState<PageKey>("overview");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("desktop");
   const [dark, setDark] = useState(() => localStorage.getItem("bank-empire-theme") === "dark");
   const [helpOpen, setHelpOpen] = useState(false);
   const [reputationOpen, setReputationOpen] = useState(false);
@@ -65,6 +67,21 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const updateLayout = () => {
+      const width = Math.round(viewport?.width ?? window.innerWidth);
+      const next: LayoutMode = width < 720 ? "narrow" : width < 1180 ? "split" : width < 1700 ? "desktop" : "wide";
+      setLayoutMode((current) => current === next ? current : next);
+    };
+    updateLayout();
+    window.addEventListener("resize", updateLayout);
+    viewport?.addEventListener("resize", updateLayout);
+    return () => {
+      window.removeEventListener("resize", updateLayout);
+      viewport?.removeEventListener("resize", updateLayout);
+    };
   }, []);
 
   const availablePages = useMemo(() => new Set<PageKey>(Object.keys(pageDefinitions).filter((key) => key !== "holdings" || stageRank[game.campaignStage] >= stageRank.regional) as PageKey[]), [game.campaignStage]);
@@ -89,7 +106,7 @@ export default function App() {
   const reputationChange = reputationDelta30(game);
   const openDevFromVersion = () => setVersionClicks((count) => { const next = count + 1; if (next >= 5) { setDevOpen(true); return 0; } return next; });
 
-  return <div className="app app-v8 app-v82 app-v88 app-v89" data-brand={game.brandTheme} data-page={page}>
+  return <div className="app app-v8 app-v82 app-v88 app-v89" data-brand={game.brandTheme} data-page={page} data-layout={layoutMode}>
     <aside className="sidebar sidebar-v8 sidebar-v82 sidebar-v88 sidebar-v89">
       <div className="logo logo-v7"><span>{bankMark}</span><div><strong>{game.bankName}</strong><small>{game.slogan || `${game.campaignStage} banking group`}</small></div></div>
       <nav className="grouped-navigation">{navigation.map((group) => {
