@@ -1,0 +1,102 @@
+.app-v87 .cash-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-v87 .cash-bridge-check {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.app-v87 .cash-bridge-check.balanced {
+  background: var(--green-soft, #e3efe8);
+  color: var(--green, #2d6950);
+}
+
+.app-v87 .cash-bridge-check.warning {
+  background: var(--amber-soft, #f5ead6);
+  color: var(--warning, #9a5d2d);
+}
+
+.app-v87 .cash-flow-column > div {
+  min-height: 42px;
+}
+
+.app-v87 .cash-flow-column > div span,
+.app-v87 .cash-flow-column > div strong {
+  font-size: 14px;
+}
+
+.app-v87 .report-history-v87 .panel-heading {
+  align-items: flex-end;
+}
+
+.app-v87 .report-table-v87 {
+  max-height: 720px;
+  overflow: auto;
+  border: 1px solid var(--line, #dedfd8);
+  border-radius: 14px;
+}
+
+.app-v87 .report-table-v87 .report-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 52px;
+  background: var(--panel, #fffefa);
+  box-shadow: 0 1px 0 var(--line, #dedfd8);
+}
+
+.app-v87 .report-table-v87 .report-table-head span {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.app-v87 .report-table-v87 .report-table-row {
+  min-height: 62px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.app-v87 .report-table-v87 .report-table-row > span,
+.app-v87 .report-table-v87 .report-table-row > strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.app-v87 .report-table-v87 .report-table-row > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.app-v87 .report-table-v87 .report-table-row > span:first-child strong {
+  font-size: 15px;
+}
+
+.app-v87 .report-table-v87 .report-table-row > span:first-child small {
+  font-size: 12px;
+  opacity: .72;
+}
+
+.app-v87 .report-table-v87 .positive {
+  color: var(--green, #2d6950);
+}
+
+@media (max-width: 900px) {
+  .app-v87 .cash-heading-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
+  .app-v87 .report-table-v87 {
+    max-height: none;
+  }
+}
