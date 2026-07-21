@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { chooseDecisionV5, createCampaign } from "./game/engine";
 import { requiresCEOApproval } from "./game/v86/gameplay";
-import { advanceDaysV87, prepareV87State } from "./game/v87/gameplay";
+import { advanceDaysV87Final, prepareV87Final } from "./game/v87/final";
 import { clearGame, hasCheckpoint, loadGame, restoreCheckpoint, saveGame, type GameState } from "./game/store";
 import { DevPanel } from "./dev/DevPanel";
 import { DecisionModal, GameOverModal } from "./ui/Modals";
@@ -80,7 +80,7 @@ function storedBankMark(bankName: string) {
 }
 
 export default function App() {
-  const [game, setGame] = useState<GameState>(() => prepareV87State(loadGame()));
+  const [game, setGame] = useState<GameState>(() => prepareV87Final(loadGame()));
   const [page, setPage] = useState<PageKey>("overview");
   const [dark, setDark] = useState(() => localStorage.getItem("bank-empire-theme") === "dark");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -108,14 +108,14 @@ export default function App() {
 
   if (!game.setupComplete) return <SetupScreen onStart={(draft: SetupDraft) => {
     localStorage.setItem("bank-empire-bank-mark", JSON.stringify({ bankName: draft.bankName, mark: draft.bankLogo }));
-    setGame(prepareV87State(createCampaign(draft)));
+    setGame(prepareV87Final(createCampaign(draft)));
   }} />;
 
-  const action = (fn: (state: GameState) => GameState) => setGame((current) => prepareV87State(fn(current)));
-  const advance = (days: number) => setGame((current) => advanceDaysV87(current, days));
+  const action = (fn: (state: GameState) => GameState) => setGame((current) => prepareV87Final(fn(current)));
+  const advance = (days: number) => setGame((current) => advanceDaysV87Final(current, days));
   const pageTitle = pageDefinitions[page].label;
   const restart = () => { localStorage.removeItem("bank-empire-bank-mark"); setGame(clearGame()); setPage("overview"); };
-  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(prepareV87State(checkpoint)); setPage("risk"); } };
+  const retry = () => { const checkpoint = restoreCheckpoint(); if (checkpoint) { setGame(prepareV87Final(checkpoint)); setPage("risk"); } };
   const navigate = (target: string) => { if (target in pageDefinitions && availablePages.has(target as PageKey)) setPage(target as PageKey); };
   const navigateBranchTab = (tab: string) => {
     setPage("network");
