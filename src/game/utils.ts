@@ -3,7 +3,7 @@ import type { GameEvent, GameState, HistoryPoint } from "./types";
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 export const round = (value: number) => Math.round(value);
 export const randomBetween = (min: number, max: number) => min + Math.random() * (max - min);
-const displayCurrency = (value: string) => value.replace(/NOK\s*/g, "$");
+const displayCurrency = (value: string) => value.replace(/\$(?=\d)/g, "NOK ").replace(/NOK\s+NOK\s+/g, "NOK ");
 
 export function createEvent(day: number, tone: GameEvent["tone"], title: string, body: string): GameEvent {
   return {
