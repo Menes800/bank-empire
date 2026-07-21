@@ -1,5 +1,8 @@
 export type BrandTheme = "forest" | "copper" | "gold";
 export type Difficulty = "relaxed" | "balanced" | "hard";
+export type CurrencyCode = "NOK" | "SEK" | "DKK" | "EUR" | "GBP" | "USD" | "CHF" | "JPY";
+export type HomeMarket = "NO" | "SE" | "DK" | "FI" | "DE" | "GB" | "US" | "CH" | "JP";
+export type NameStyle = "local" | "international" | "mixed";
 export type ProductKey = "everyday" | "savings" | "mortgage" | "sme" | "cards" | "insurance" | "wealth";
 export type EventTone = "positive" | "warning" | "neutral";
 export type LendingPolicy = "conservative" | "balanced" | "aggressive";
@@ -25,6 +28,33 @@ export type LoanStatus = "performing" | "watch" | "delinquent" | "late" | "overd
 export type CollectionStage = "early-arrears" | "workout" | "external-collections" | "enforcement" | "closed";
 export type InboxUrgency = "routine" | "important" | "critical";
 export type InboxStatus = "open" | "delegated" | "resolved";
+export type MandatePreset = "cautious" | "balanced" | "autonomous" | "custom";
+
+export type ExecutivePermission =
+  | "hiring" | "transfers" | "retention" | "training" | "branchManagers" | "layoffs" | "localUpgrades"
+  | "liquidity" | "funding" | "rates" | "capitalBuffer" | "investments"
+  | "lending" | "creditTerms" | "collections" | "collateral" | "compliance" | "riskLimits"
+  | "campaigns" | "marketingBudget" | "competitorResponse" | "customerSegments" | "localGrowth"
+  | "cyberIncidents" | "patching" | "vendors" | "itPurchases" | "technicalDebt" | "techProjects";
+
+export type ExecutiveMandate = {
+  role: ExecutiveRole;
+  preset: MandatePreset;
+  permissions: ExecutivePermission[];
+  spendLimit: number;
+  riskLimit: number;
+  alwaysEscalate: string[];
+};
+
+export type ManagementLogEntry = {
+  id: string;
+  day: number;
+  role: ExecutiveRole;
+  title: string;
+  detail: string;
+  amount?: number;
+  outcome: "completed" | "reported" | "escalated";
+};
 
 export type GameEvent = { id: string; day: number; tone: EventTone; title: string; body: string };
 export type HistoryPoint = { day: number; cash: number; deposits: number; loans: number; profit: number; customers: number; reputation: number; sharePrice: number };
@@ -101,6 +131,12 @@ export type BankProject = {
   profile?: BranchProfile;
 };
 
+export type EmployeeDecisionRecord = {
+  day: number;
+  title: string;
+  outcome: string;
+};
+
 export type EmployeeProfile = {
   id: string;
   name: string;
@@ -120,6 +156,19 @@ export type EmployeeProfile = {
   wellbeing?: number;
   potential?: number;
   tenureMonths?: number;
+  nationality?: string;
+  leadershipStyle?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  workHistory?: string[];
+  ceoRelationship?: number;
+  boardRelationship?: number;
+  peerRelationship?: number;
+  quitRisk?: number;
+  ambition?: number;
+  strategyOpinion?: string;
+  decisionHistory?: EmployeeDecisionRecord[];
+  availableUntilDay?: number;
 };
 
 export type AutomationPlan = { treasury: AutomationMode; lending: AutomationMode; marketing: AutomationMode; operations: AutomationMode };
@@ -202,16 +251,40 @@ export type CashFlowSnapshot = {
   closingCash: number;
 };
 
-export type CampaignInput = { founderName: string; bankName: string; bankLogo?: string; background: string; brandTheme: BrandTheme; difficulty: Difficulty };
+export type CampaignInput = {
+  founderName: string;
+  bankName: string;
+  bankLogo?: string;
+  background: string;
+  brandTheme: BrandTheme;
+  difficulty: Difficulty;
+  currency: CurrencyCode;
+  homeMarket: HomeMarket;
+  locale: string;
+  nameStyle: NameStyle;
+  slogan: string;
+  firstBranchName: string;
+  founderStory: string;
+  worldSeed: number;
+};
 
 export type GameState = {
-  version: 8;
+  version: 88;
   setupComplete: boolean;
   founderName: string;
   background: string;
   bankName: string;
+  bankMark: string;
+  slogan: string;
+  firstBranchName: string;
+  founderStory: string;
   brandTheme: BrandTheme;
   difficulty: Difficulty;
+  currency: CurrencyCode;
+  homeMarket: HomeMarket;
+  locale: string;
+  nameStyle: NameStyle;
+  worldSeed: number;
   day: number;
   week: number;
   quarter: number;
@@ -282,6 +355,8 @@ export type GameState = {
   candidatePool: EmployeeProfile[];
   automation: AutomationPlan;
   managementControl: ManagementControlPlan;
+  executiveMandates: Record<ExecutiveRole, ExecutiveMandate>;
+  managementLog: ManagementLogEntry[];
   customerSegments: CustomerSegment[];
   productTerms: Record<ProductKey, ProductTerms>;
   activeLoans: ActiveLoan[];

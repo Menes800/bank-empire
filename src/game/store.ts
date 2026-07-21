@@ -1,4 +1,4 @@
-import { emptyGame } from "./engine";
+import { defaultExecutiveMandates, emptyGame, repairCampaignState } from "./engine";
 import type { EmployeeDepartment, EmployeeProfile, GameState } from "./types";
 
 const STORAGE_KEY = "bank-empire-save-v4";
@@ -27,6 +27,18 @@ function migrateEmployee(employee: EmployeeProfile): EmployeeProfile {
     wellbeing: employee.wellbeing ?? employee.energy,
     potential: employee.potential ?? Math.min(95, employee.skill + 9),
     tenureMonths: employee.tenureMonths ?? 1,
+    nationality: employee.nationality ?? "NO",
+    leadershipStyle: employee.leadershipStyle ?? "Practical",
+    strengths: employee.strengths ?? [employee.trait],
+    weaknesses: employee.weaknesses ?? ["Limited track record in this bank"],
+    workHistory: employee.workHistory ?? [employee.role],
+    ceoRelationship: employee.ceoRelationship ?? 50,
+    boardRelationship: employee.boardRelationship ?? 50,
+    peerRelationship: employee.peerRelationship ?? 55,
+    quitRisk: employee.quitRisk ?? Math.max(5, 55 - employee.loyalty),
+    ambition: employee.ambition ?? Math.min(95, employee.leadership + 8),
+    strategyOpinion: employee.strategyOpinion ?? "Build the bank with disciplined growth.",
+    decisionHistory: employee.decisionHistory ?? [],
   };
 }
 
@@ -43,7 +55,16 @@ export function loadGame(): GameState {
     const migrated: GameState = {
       ...base,
       ...parsed,
-      version: 8,
+      version: 88,
+      currency: parsed.currency ?? "NOK",
+      homeMarket: parsed.homeMarket ?? "NO",
+      locale: parsed.locale ?? "nb-NO",
+      nameStyle: parsed.nameStyle ?? "mixed",
+      bankMark: parsed.bankMark ?? base.bankMark,
+      slogan: parsed.slogan ?? base.slogan,
+      firstBranchName: parsed.firstBranchName ?? parsed.branchOffices?.[0]?.name ?? base.firstBranchName,
+      founderStory: parsed.founderStory ?? base.founderStory,
+      worldSeed: parsed.worldSeed ?? base.worldSeed,
       cash: (parsed.cash ?? base.cash) + legacyCapitalBoost,
       competitors: parsed.competitors ?? base.competitors,
       objectives: parsed.objectives ?? base.objectives,
@@ -76,6 +97,8 @@ export function loadGame(): GameState {
       candidatePool: (parsed.candidatePool ?? base.candidatePool).map(migrateEmployee),
       automation: { ...base.automation, ...(parsed.automation ?? {}) },
       managementControl: { ...base.managementControl, ...(parsed.managementControl ?? {}) },
+      executiveMandates: { ...defaultExecutiveMandates(), ...(parsed.executiveMandates ?? {}) },
+      managementLog: parsed.managementLog ?? [],
       customerSegments: parsed.customerSegments ?? base.customerSegments,
       productTerms: { ...base.productTerms, ...(parsed.productTerms ?? {}) },
       activeLoans: (parsed.activeLoans ?? []).map((loan) => ({
@@ -98,20 +121,23 @@ export function loadGame(): GameState {
       strategyReviewDay: parsed.strategyReviewDay && parsed.strategyReviewDay > (parsed.day ?? 1) ? parsed.strategyReviewDay : (parsed.day ?? 1) + 90,
       monthlyBudget: parsed.monthlyBudget ?? base.monthlyBudget,
       cashFlowHistory: parsed.cashFlowHistory ?? [],
+      events: parsed.events ?? [],
       devModeUsed: parsed.devModeUsed ?? false,
       bankruptcyProtection: parsed.bankruptcyProtection ?? false,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-    return migrated;
+    const repaired = repairCampaignState(migrated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(repaired));
+    return repaired;
   } catch {
     return emptyGame();
   }
 }
 
 export function saveGame(state: GameState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  if (state.setupComplete && !state.gameOverReason && !state.pendingDecision && state.day >= 30 && state.day % 30 === 0) {
-    localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(state));
+  const repaired = repairCampaignState(state);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(repaired));
+  if (repaired.setupComplete && !repaired.gameOverReason && !repaired.pendingDecision && repaired.day >= 30 && repaired.day % 30 === 0) {
+    localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(repaired));
   }
 }
 
@@ -125,11 +151,13 @@ export function restoreCheckpoint(): GameState | null {
     if (!saved) return null;
     const state = JSON.parse(saved) as GameState;
     const base = emptyGame();
-    const restored: GameState = {
+    const restored = repairCampaignState({
       ...base,
       ...state,
-      version: 8,
+      version: 88,
       managementControl: { ...base.managementControl, ...(state.managementControl ?? {}) },
+      executiveMandates: { ...defaultExecutiveMandates(), ...(state.executiveMandates ?? {}) },
+      managementLog: state.managementLog ?? [],
       collectionCases: state.collectionCases ?? [],
       ceoInbox: state.ceoInbox ?? [],
       competitorMoves: state.competitorMoves ?? [],
@@ -139,7 +167,7 @@ export function restoreCheckpoint(): GameState | null {
       gameOverReason: null,
       liquidityBreachDays: 0,
       capitalBreachDays: 0,
-    };
+    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
     return restored;
   } catch {
@@ -162,12 +190,18 @@ export type {
   BranchPriority,
   BranchProfile,
   CampaignStage,
+  CurrencyCode,
   Difficulty,
+  ExecutivePermission,
   ExecutiveRole,
   GameState,
+  HomeMarket,
   LendingPolicy,
   ManagementArea,
   ManagementControlMode,
+  ManagementLogEntry,
+  MandatePreset,
+  NameStyle,
   ProductKey,
   ProductPreset,
   UpgradeAuthority,

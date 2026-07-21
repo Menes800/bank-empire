@@ -1,0 +1,68 @@
+/* Bank Empire UI cleanup: one layout system and one delegation system. */
+.main-content-v88 > * {
+  width: min(1680px, calc(100% - 48px));
+  max-width: 1680px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+.main-content-v88 > .sticky-command-header { width: min(1680px, calc(100% - 48px)); }
+.main-content-v88 .content-grid,
+.main-content-v88 .overview-grid,
+.main-content-v88 .overview-lower-grid,
+.main-content-v88 .inbox-layout,
+.main-content-v88 .workforce-detail-layout { align-items: start; }
+
+/* CEO Inbox only grows with its content. */
+.page-inbox > .attention-strip { display: none; }
+.inbox-command-card-v889 { padding: 19px 22px; border-radius: 15px; }
+.inbox-command-card-v889 h2 { font-size: clamp(23px, 2.4vw, 34px); }
+.inbox-layout-v889 { display: block; }
+.inbox-main-panel-v889,
+.page-inbox .panel,
+.page-inbox .inbox-main-panel { height: auto !important; min-height: 0 !important; align-self: start; }
+.inbox-main-panel-v889 { padding-bottom: 16px; }
+.inbox-clear-v889 { padding: 22px; border: 1px dashed var(--line); border-radius: 11px; background: var(--surface-2); text-align: center; }
+.inbox-clear-v889 strong { display: block; font-size: 13px; }
+.inbox-clear-v889 p { margin: 5px auto 13px; max-width: 620px; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.mandate-block-reason-v889 { margin: 11px 0 0 45px; padding: 9px 10px; border-radius: 9px; display: flex; gap: 7px; align-items: center; flex-wrap: wrap; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); }
+.mandate-block-reason-v889 > div { flex: 1 1 360px; }
+.mandate-block-reason-v889 small,
+.mandate-block-reason-v889 strong { display: block; }
+.mandate-block-reason-v889 small { color: var(--muted); font-size: 6px; letter-spacing: .08em; }
+.mandate-block-reason-v889 strong { margin-top: 3px; font-size: 8px; }
+.mandate-block-reason-v889 > span { padding: 5px 7px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); background: var(--surface); font-size: 6.5px; }
+
+/* Mandate cards display real authority and do not reserve decorative whitespace. */
+.executive-mandate-grid-v88 { grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: 12px; }
+.mandate-permissions-v88 { min-height: 0; }
+.mandate-power-v889 { margin-top: 9px; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--line); background: var(--surface-2); }
+.mandate-power-v889 strong,
+.mandate-power-v889 small { display: block; }
+.mandate-power-v889 strong { font-size: 9px; }
+.mandate-power-v889 small { margin-top: 2px; color: var(--muted); font-size: 7px; }
+.mandate-power-v889 > b { padding: 4px 6px; border-radius: 99px; font-size: 6px; white-space: nowrap; }
+.mandate-power-v889 > b.good { color: var(--positive); background: color-mix(in srgb, var(--positive) 9%, var(--surface)); }
+.mandate-power-v889 > b.warning { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.mandate-power-v889.inactive { opacity: .62; }
+.mandate-log-v88 footer { margin-top: 5px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.mandate-log-v88 footer b { margin: 0; }
+.mandate-outcome-v889 { padding: 3px 5px; border-radius: 99px; font-size: 6px; font-style: normal; text-transform: uppercase; letter-spacing: .05em; }
+.mandate-outcome-v889.completed,
+.mandate-outcome-v889.reported { color: var(--positive); background: color-mix(in srgb, var(--positive) 9%, var(--surface)); }
+.mandate-outcome-v889.escalated { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+
+/* Overview alignment and compact attention. */
+.attention-strip-v889 { grid-template-columns: minmax(180px, .26fr) minmax(0, 1fr); }
+.attention-strip-v889 .attention-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 1260px) {
+  .executive-mandate-grid-v88 { grid-template-columns: repeat(2, minmax(250px, 1fr)); }
+}
+@media (max-width: 900px) {
+  .main-content-v88 > *, .main-content-v88 > .sticky-command-header { width: calc(100% - 24px); }
+  .executive-mandate-grid-v88 { grid-template-columns: 1fr; }
+  .attention-strip-v889 { grid-template-columns: 1fr; }
+  .attention-strip-v889 .attention-items { grid-template-columns: 1fr; }
+  .mandate-block-reason-v889 { margin-left: 0; }
+}

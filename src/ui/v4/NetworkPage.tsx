@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   approveBranchUpgradeRecommendation,
   assignBranchManager,
-  getBranchOpeningAssessment,
+  getExpansionAssessmentV88,
   setBranchManagerControl,
   setBranchPriority,
   setBranchUpgradeAuthority,
-  startBranchProjectV7,
+  startBranchProjectV88,
   startBranchUpgrade,
   startStrategicProject,
 } from "../../game/engine";
@@ -15,7 +15,6 @@ import type { BranchOffice, District } from "../../game/types";
 import type { GameAction } from "../common";
 import { money } from "../format";
 
-const stageOrder = ["startup", "regional", "national", "group", "empire"];
 const priorities: BranchPriority[] = ["balanced", "growth", "deposits", "business", "profitability"];
 const profiles: BranchProfile[] = ["retail", "mortgage", "business", "wealth"];
 const upgradeOptions: { key: UpgradeAuthority; label: string; detail: string }[] = [
@@ -83,15 +82,15 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
 
   const selectedBranch = game.branchOffices.find((branch) => branch.id === selectedBranchId) ?? game.branchOffices[0];
   const selectedMetrics = selectedBranch ? branchMetrics(selectedBranch) : null;
-  const selectedManager = selectedBranch ? game.employeeRoster.find((employee) => employee.id === selectedBranch.managerId) : undefined;
   const eligibleManagers = game.employeeRoster.filter((employee) => !employee.executiveRole && employee.leadership >= 45);
   const district = game.districts.find((item) => item.id === selectedDistrictId) ?? game.districts[0];
   const districtBranch = game.branchOffices.find((branch) => branch.districtId === district?.id);
   const districtProject = game.projects.find((project) => project.districtId === district?.id && project.status !== "completed");
-  const assessment = district ? getBranchOpeningAssessment(game, district.id) : null;
+  const assessment = district ? getExpansionAssessmentV88(game, district.id) : null;
   const activeProjects = game.projects.filter((project) => project.status !== "completed");
 
   const portfolio = useMemo(() => game.branchOffices.map((branch) => ({ branch, metrics: branchMetrics(branch), status: branchStatus(branch), manager: game.employeeRoster.find((employee) => employee.id === branch.managerId) })), [game.branchOffices, game.employeeRoster]);
+  const marketAssessments = useMemo(() => game.districts.map((item) => ({ district: item, assessment: getExpansionAssessmentV88(game, item.id) })), [game]);
   const totalProfit = portfolio.reduce((sum, item) => sum + item.metrics.profit, 0);
   const totalCustomers = portfolio.reduce((sum, item) => sum + item.metrics.customers, 0);
   const vacant = portfolio.filter((item) => !item.branch.managerId).length;
@@ -100,19 +99,39 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
   const weakest = [...portfolio].sort((a, b) => a.metrics.profit - b.metrics.profit)[0];
 
   const chooseDistrict = (item: District) => {
+    const itemAssessment = getExpansionAssessmentV88(game, item.id);
+    if (itemAssessment.status === "locked") return;
     setSelectedDistrictId(item.id);
     setProfile(bestProfile(item));
   };
 
+  const openMap = () => {
+    const firstActionable = marketAssessments.find((item) => item.assessment.status === "available")
+      ?? marketAssessments.find((item) => item.assessment.status === "funding")
+      ?? marketAssessments.find((item) => item.assessment.status === "project")
+      ?? marketAssessments[0];
+    if (firstActionable) chooseDistrict(firstActionable.district);
+    setMapOpen(true);
+  };
+
+  useEffect(() => {
+    if (!mapOpen || !district) return;
+    const currentAssessment = getExpansionAssessmentV88(game, district.id);
+    if (currentAssessment.status !== "owned" && currentAssessment.status !== "locked") return;
+    const replacement = marketAssessments.find((item) => item.assessment.status === "available")
+      ?? marketAssessments.find((item) => item.assessment.status === "funding");
+    if (replacement) chooseDistrict(replacement.district);
+  }, [mapOpen, game, district, marketAssessments]);
+
   return <>
     <section className="network-overview-hero panel">
       <div><p className="eyebrow">BRANCH NETWORK</p><h2>Manage outcomes, not daily branch tasks</h2><p>Managers run each location. The COO allocates capacity and prepares upgrades. You set priorities and approve only major investments.</p></div>
-      <button className="primary" onClick={() => setMapOpen(true)}>Open market map</button>
+      <button className="primary" onClick={openMap}>Open market map</button>
     </section>
 
     <section className="network-kpi-row">
       <Metric label="Monthly network result" value={money.format(totalProfit)} tone={totalProfit >= 0 ? "positive" : "negative"} />
-      <Metric label="Branch customers" value={totalCustomers.toLocaleString("en-GB")} />
+      <Metric label="Branch customers" value={totalCustomers.toLocaleString(game.locale)} />
       <Metric label="Locations" value={`${game.branchOffices.length}`} />
       <Metric label="Need attention" value={`${attention}`} tone={attention > 0 ? "warning" : "positive"} />
       <Metric label="Manager vacancies" value={`${vacant}`} tone={vacant > 0 ? "warning" : "positive"} />
@@ -130,11 +149,8 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
         <div className="branch-overview-head"><span>Location</span><span>Manager</span><span>Result</span><span>Customers</span><span>Capacity</span><span>Status</span></div>
         {portfolio.map(({ branch, metrics, status, manager }) => <button key={branch.id} className={selectedBranch?.id === branch.id ? "selected" : ""} onClick={() => setSelectedBranchId(branch.id)}>
           <span><strong>{branch.name}</strong><small>{branch.profile} · Level {branch.level}</small></span>
-          <span>{manager?.name ?? "Vacant"}</span>
-          <span className={metrics.profit >= 0 ? "positive" : "negative"}>{money.format(metrics.profit)}</span>
-          <span>{metrics.customers.toLocaleString("en-GB")}</span>
-          <span>{metrics.capacity.toFixed(0)}%</span>
-          <span><b className={`branch-status ${status.key}`}>{status.label}</b></span>
+          <span>{manager?.name ?? "Vacant"}</span><span className={metrics.profit >= 0 ? "positive" : "negative"}>{money.format(metrics.profit)}</span>
+          <span>{metrics.customers.toLocaleString(game.locale)}</span><span>{metrics.capacity.toFixed(0)}%</span><span><b className={`branch-status ${status.key}`}>{status.label}</b></span>
         </button>)}
       </div>
     </section>
@@ -152,7 +168,6 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
         <label className="management-checkbox"><input type="checkbox" checked={selectedBranch.managerControl ?? false} onChange={(event) => action((state) => setBranchManagerControl(state, selectedBranch.id, event.target.checked))} /><span><strong>Manager runs this branch</strong><small>Daily service, local campaigns, staffing pressure and routine decisions are handled automatically.</small></span></label>
         <label className="compact-control"><span><strong>Operating priority</strong><small>{priorityCopy[selectedBranch.operatingPriority ?? "balanced"]}</small></span><select value={selectedBranch.operatingPriority ?? "balanced"} onChange={(event) => action((state) => setBranchPriority(state, selectedBranch.id, event.target.value as BranchPriority))}>{priorities.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></label>
         <label className="compact-control"><span><strong>Upgrade authority</strong><small>{upgradeOptions.find((item) => item.key === (selectedBranch.upgradeAuthority ?? "profitable"))?.detail}</small></span><select value={selectedBranch.upgradeAuthority ?? "profitable"} onChange={(event) => action((state) => setBranchUpgradeAuthority(state, selectedBranch.id, event.target.value as UpgradeAuthority))}>{upgradeOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-
         {selectedBranch.pendingUpgradeRecommendation && <div className="upgrade-recommendation"><div><small>COO RECOMMENDATION</small><strong>Expand this branch</strong><p>Capacity and local economics support a larger location. The project still uses the normal capital checks.</p></div><button className="primary small" onClick={() => action((state) => approveBranchUpgradeRecommendation(state, selectedBranch.id))}>Approve upgrade</button></div>}
         {!selectedBranch.pendingUpgradeRecommendation && <button className="secondary wide" disabled={selectedBranch.level >= 3} onClick={() => action((state) => startBranchUpgrade(state, selectedBranch.id))}>{selectedBranch.level >= 3 ? "Fully upgraded" : "Request manual upgrade"}</button>}
       </article>
@@ -163,38 +178,42 @@ export function NetworkPage({ game, action }: { game: GameState; action: GameAct
       <div className="compact-project-grid"><Project title="Mobile bank 2.0" cost={2_600_000} days={120} disabled={game.cash < 2_600_000} onClick={() => action((state) => startStrategicProject(state, "mobile-bank"))} /><Project title="Core banking renewal" cost={5_500_000} days={210} disabled={game.cash < 5_500_000} onClick={() => action((state) => startStrategicProject(state, "core-banking"))} /><Project title="Regional head office" cost={8_000_000} days={270} disabled={game.cash < 8_000_000} onClick={() => action((state) => startStrategicProject(state, "head-office"))} /></div>
     </section>
 
-    {mapOpen && <div className="market-map-overlay" role="dialog" aria-modal="true">
+    {mapOpen && district && <div className="market-map-overlay market-map-v88" role="dialog" aria-modal="true">
       <div className="market-map-shell">
-        <header><div><p className="eyebrow">MARKET EXPANSION</p><h2>Regional opportunity map</h2><p>Use the map only when comparing markets or opening a new location.</p></div><button className="icon-button" onClick={() => setMapOpen(false)}>×</button></header>
+        <header><div><p className="eyebrow">MARKET EXPANSION</p><h2>Regional opportunity map</h2><p>Open, locked, funded and occupied areas are separated clearly. The first actionable market is selected automatically.</p></div><button className="icon-button" onClick={() => setMapOpen(false)} aria-label="Close map">×</button></header>
         <div className="market-map-layout">
           <article className="market-map-canvas">
             <svg viewBox="0 0 100 100">
               <rect width="100" height="100" className="v8-map-ground" /><path className="v8-map-water" d="M88 -5 C76 18 92 31 84 51 C77 70 88 84 79 105 H110 V-5 Z" />
               <path className="v8-map-road" d="M2 59 C23 51 43 57 59 48 C73 40 88 47 99 38" /><path className="v8-map-road" d="M16 3 C26 24 42 39 56 58 C69 75 79 84 93 98" />
-              {game.districts.map((item) => {
+              {marketAssessments.map(({ district: item, assessment: itemAssessment }) => {
                 const owned = game.branchOffices.find((branch) => branch.districtId === item.id);
                 const active = game.projects.find((project) => project.districtId === item.id && project.status !== "completed");
-                const locked = stageOrder.indexOf(game.campaignStage) < stageOrder.indexOf(item.requiredStage);
-                return <g key={item.id} className={`v8-map-district ${selectedDistrictId === item.id ? "selected" : ""}`} onClick={() => chooseDistrict(item)}>
-                  <path d={districtShapes[item.id]} className={owned ? "owned" : locked ? "locked" : "available"} />
+                return <g key={item.id} className={`v8-map-district ${selectedDistrictId === item.id ? "selected" : ""} ${itemAssessment.status}`} onClick={() => chooseDistrict(item)}>
+                  <path d={districtShapes[item.id]} className={owned ? "owned" : active ? "project" : itemAssessment.status} />
                   <text x={item.mapX} y={item.mapY - 7} textAnchor="middle">{item.name.replace(" District", "").replace(" Quarter", "")}</text>
-                  <g transform={`translate(${item.mapX} ${item.mapY})`}><circle r="3.8" className={owned ? "owned" : active ? "project" : locked ? "locked" : "available"} /><text textAnchor="middle" y=".8">{owned ? `L${owned.level}` : active ? `${active.remainingDays}d` : locked ? "—" : `${districtPotential(item)}`}</text></g>
+                  <g transform={`translate(${item.mapX} ${item.mapY})`}><circle r="3.8" className={owned ? "owned" : active ? "project" : itemAssessment.status} /><text textAnchor="middle" y=".8">{owned ? `L${owned.level}` : active ? `${active.remainingDays}d` : itemAssessment.status === "locked" ? "LOCK" : districtPotential(item)}</text></g>
                 </g>;
               })}
             </svg>
-            <div className="v8-map-legend"><span><i className="owned" />Your branch</span><span><i className="available" />Available market</span><span><i className="locked" />Stage restricted</span></div>
+            <div className="v8-map-legend"><span><i className="owned" />Your branch</span><span><i className="available" />Can open now</span><span><i className="funding" />Needs funding</span><span><i className="locked" />Stage locked</span></div>
           </article>
 
           <aside className="panel market-expansion-inspector">
+            <div className="market-status-line"><span className={`market-status ${assessment?.status}`}>{assessment?.status}</span><small>Requires {district.requiredStage} stage</small></div>
             <div><p className="eyebrow">SELECTED MARKET</p><h3>{district.name}</h3><p>{district.description}</p></div>
-            <div className="market-score-row"><Metric label="Opportunity" value={`${districtPotential(district)}/100`} /><Metric label="Population" value={district.population.toLocaleString("en-GB")} /><Metric label="Competition" value={`${district.competition}/100`} /><Metric label="Opening cost" value={money.format(district.openingCost)} /></div>
+            <div className="market-score-row"><Metric label="Opportunity" value={`${districtPotential(district)}/100`} /><Metric label="Population" value={district.population.toLocaleString(game.locale)} /><Metric label="Competition" value={`${district.competition}/100`} /><Metric label="Opening cost" value={money.format(district.openingCost)} /></div>
             {districtBranch ? <div className="map-existing-branch"><strong>{districtBranch.name}</strong><span>This market is already covered by your network.</span><button className="secondary wide" onClick={() => { setSelectedBranchId(districtBranch.id); setMapOpen(false); }}>Open branch overview</button></div>
               : districtProject ? <div className="map-existing-branch"><strong>{districtProject.name}</strong><span>{districtProject.remainingDays} days remaining.</span></div>
                 : <>
                   <div className="map-profile-grid">{profiles.map((item) => <button key={item} className={profile === item ? "selected" : ""} onClick={() => setProfile(item)}><strong>{profileNames[item]}</strong></button>)}</div>
-                  {!assessment?.allowed && <div className="constraint-list"><strong>Cannot open yet</strong>{assessment?.reasons.map((reason) => <span key={reason}>{reason}</span>)}</div>}
-                  <div className="map-funding-grid"><button className="secondary" disabled={!assessment?.cashAllowed} onClick={() => action((state) => startBranchProjectV7(state, district.id, profile, "cash"))}><strong>Pay in cash</strong><small>{money.format(district.openingCost)}</small></button><button className="primary" disabled={!assessment?.financeAllowed} onClick={() => action((state) => startBranchProjectV7(state, district.id, profile, "financed"))}><strong>Finance expansion</strong><small>{money.format(assessment?.upfront ?? 0)} upfront</small></button></div>
+                  {assessment?.status === "locked" && <div className="constraint-list locked"><strong>Stage requirements</strong>{assessment.reasons.map((reason) => <span key={reason}>{reason}</span>)}</div>}
+                  <div className="map-funding-grid funding-v88">
+                    <button className="secondary" disabled={!assessment?.cashAllowed} onClick={() => action((state) => startBranchProjectV88(state, district.id, profile, "cash"))}><strong>Pay in cash</strong><small>{money.format(district.openingCost)}</small>{!assessment?.cashAllowed && assessment?.cashReasons.filter((reason) => !assessment.financeReasons.includes(reason)).slice(0, 2).map((reason) => <em key={reason}>{reason}</em>)}</button>
+                    <button className="primary" disabled={!assessment?.financeAllowed} onClick={() => action((state) => startBranchProjectV88(state, district.id, profile, "financed"))}><strong>Finance expansion</strong><small>{money.format(assessment?.upfront ?? 0)} upfront</small>{!assessment?.financeAllowed && assessment?.financeReasons.filter((reason) => !assessment.cashReasons.includes(reason)).slice(0, 2).map((reason) => <em key={reason}>{reason}</em>)}</button>
+                  </div>
                 </>}
+            <button className="map-close-continue secondary wide" onClick={() => setMapOpen(false)}>Close map and continue</button>
           </aside>
         </div>
       </div>

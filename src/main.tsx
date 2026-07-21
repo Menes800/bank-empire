@@ -14,6 +14,12 @@ import './v70.css';
 import './v8.css';
 import './v81.css';
 import './v82.css';
+import './v88.css';
+import './v889.css';
+import './v89.css';
+import './v89-fixes.css';
+import './v891.css';
+import './v810.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
