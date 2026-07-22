@@ -176,7 +176,8 @@ function runAutomaticBranchUpgrades(state: GameState): GameState {
 
     const authority = branch.upgradeAuthority ?? "manual";
     const canAfford = next.cash >= economics.cost + 500_000;
-    const mayAutoApprove = authority === "small" ? branch.level === 1 && economics.cost <= 1_250_000 : authority === "profitable" ? paybackMonths <= 24 : false;
+    const mayAutoApprove = (authority === "small" ? branch.level === 1 && economics.cost <= 1_250_000 : authority === "profitable" ? paybackMonths <= 24 : false)
+      && economics.cost <= state.cooNetworkPolicy.investmentLimit;
 
     if (mayAutoApprove && canAfford && state.managementControl.operations === "automatic") {
       next = startBranchUpgrade(next, branch.id);

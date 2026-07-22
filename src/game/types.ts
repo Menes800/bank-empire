@@ -7,7 +7,7 @@ export type ProductKey = "everyday" | "savings" | "mortgage" | "sme" | "cards" |
 export type EventTone = "positive" | "warning" | "neutral";
 export type LendingPolicy = "conservative" | "balanced" | "aggressive";
 export type EconomicCycle = "boom" | "growth" | "stable" | "slowdown" | "recession";
-export type CompetitorStrategy = "digital" | "premium" | "volume" | "conservative";
+export type CompetitorStrategy = "digital" | "premium" | "volume" | "conservative" | "business" | "community" | "challenger";
 export type ObjectiveMetric = "customers" | "profit" | "reputation" | "capitalRatio" | "liquidityRatio" | "compliance" | "marketShare";
 export type CampaignStage = "startup" | "regional" | "national" | "group" | "empire";
 export type BranchProfile = "retail" | "mortgage" | "business" | "wealth";
@@ -15,6 +15,8 @@ export type BranchMandate = "manual" | "guarded" | "autonomous" | "growth";
 export type BranchFocus = "service" | "deposits" | "lending" | "business";
 export type BranchPriority = "balanced" | "growth" | "deposits" | "business" | "profitability";
 export type UpgradeAuthority = "manual" | "small" | "profitable";
+export type BranchPortfolioStatus = "growth" | "stable" | "turnaround" | "review";
+export type CooNetworkPriority = "profitability" | "balanced" | "growth";
 export type ProjectKind = "branch" | "branch-upgrade" | "head-office" | "mobile-bank" | "core-banking" | "integration";
 export type ProjectStatus = "planned" | "active" | "delayed" | "completed";
 export type ExecutiveRole = "CFO" | "COO" | "CRO" | "CMO" | "CTO";
@@ -58,7 +60,31 @@ export type ManagementLogEntry = {
 
 export type GameEvent = { id: string; day: number; tone: EventTone; title: string; body: string };
 export type HistoryPoint = { day: number; cash: number; deposits: number; loans: number; profit: number; customers: number; reputation: number; sharePrice: number };
-export type Competitor = { id: string; name: string; strategy: CompetitorStrategy; customers: number; deposits: number; loans: number; reputation: number; marketShare: number; depositRate: number; loanRate: number; branches: number; digitalLevel: number; acquisitionPrice: number };
+export type Competitor = {
+  id: string;
+  name: string;
+  strategy: CompetitorStrategy;
+  customers: number;
+  deposits: number;
+  loans: number;
+  reputation: number;
+  marketShare: number;
+  depositRate: number;
+  loanRate: number;
+  branches: number;
+  digitalLevel: number;
+  acquisitionPrice: number;
+  homeCity?: string;
+  specialty?: string;
+  enteredDay?: number;
+};
+export type CompetitorExit = {
+  id: string;
+  name: string;
+  day: number;
+  reason: "acquired" | "withdrawn" | "merged";
+  buyer?: string;
+};
 export type BoardObjective = { id: string; title: string; description: string; metric: ObjectiveMetric; target: number; deadlineDay: number; rewardCash: number; rewardReputation: number; completed: boolean; failed: boolean };
 
 export type DecisionEffect = Partial<Pick<GameState, "cash" | "deposits" | "loans" | "reputation" | "satisfaction" | "customers" | "employees" | "compliance" | "digitalLevel" | "cyberSecurity" | "boardConfidence" | "brandStrength" | "fraudLosses">>;
@@ -71,6 +97,8 @@ export type LoanApplication = { id: string; customerName: string; segment: "Mort
 export type District = {
   id: string;
   name: string;
+  city: string;
+  region: string;
   description: string;
   population: number;
   incomeIndex: number;
@@ -82,9 +110,28 @@ export type District = {
   wealthDemand: number;
   openingCost: number;
   monthlyRent: number;
+  maxBranches: number;
   requiredStage: CampaignStage;
   mapX: number;
   mapY: number;
+};
+
+export type BranchRecoveryPlan = {
+  startDay: number;
+  reviewDay: number;
+  deadlineDay: number;
+  baselineProfit: number;
+  targetProfit: number;
+  status: "active" | "recovered" | "escalated";
+};
+
+export type CooNetworkPolicy = {
+  enabled: boolean;
+  priority: CooNetworkPriority;
+  investmentLimit: number;
+  reviewDays: number;
+  breakEvenDays: number;
+  autoHireManagers: boolean;
 };
 
 export type BranchOffice = {
@@ -106,6 +153,10 @@ export type BranchOffice = {
   operatingPriority?: BranchPriority;
   upgradeAuthority?: UpgradeAuthority;
   pendingUpgradeRecommendation?: boolean;
+  portfolioStatus?: BranchPortfolioStatus;
+  recoveryPlan?: BranchRecoveryPlan | null;
+  underperformingMonths?: number;
+  cooLastReviewDay?: number;
   localCustomers?: number;
   localDeposits?: number;
   localLoans?: number;
@@ -229,7 +280,7 @@ export type CompetitorMove = {
   day: number;
   competitorId: string;
   competitorName: string;
-  type: "pricing" | "branch" | "digital" | "talent";
+  type: "pricing" | "branch" | "digital" | "talent" | "product" | "service" | "entry" | "exit";
   title: string;
   description: string;
   impact: number;
@@ -339,6 +390,7 @@ export type GameState = {
   gdpGrowth: number;
   economicCycle: EconomicCycle;
   competitors: Competitor[];
+  competitorHistory: CompetitorExit[];
   objectives: BoardObjective[];
   pendingDecision: DecisionEvent | null;
   loanApplications: LoanApplication[];
@@ -358,6 +410,7 @@ export type GameState = {
   automation: AutomationPlan;
   managementControl: ManagementControlPlan;
   executiveMandates: Record<ExecutiveRole, ExecutiveMandate>;
+  cooNetworkPolicy: CooNetworkPolicy;
   managementLog: ManagementLogEntry[];
   customerSegments: CustomerSegment[];
   productTerms: Record<ProductKey, ProductTerms>;

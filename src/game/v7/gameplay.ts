@@ -1,5 +1,6 @@
 import { chooseDecisionV5 } from "../v5/gameplay";
 import { advanceDaysV6 } from "../v6/gameplay";
+import { normaliseMarketShares } from "../simulation";
 import type {
   ActiveLoan,
   BankProject,
@@ -84,17 +85,25 @@ function syncBranchBalanceSheet(state: GameState): GameState {
 
 export function getBranchEconomicsV7(state: GameState, branch: BranchOffice) {
   const employees = state.employeeRoster.filter((employee) => employee.assignedBranchId === branch.id || employee.id === branch.managerId);
+  const manager = state.employeeRoster.find((employee) => employee.id === branch.managerId);
+  const coo = state.employeeRoster.find((employee) => employee.executiveRole === "COO");
   const unnamedEmployees = Math.max(0, state.employees - state.employeeRoster.length);
   const totalBranchSlots = state.branchOffices.reduce((sum, office) => sum + office.staffSlots, 0);
   const allocatedUnnamedEmployees = unnamedEmployees * branch.staffSlots / Math.max(1, totalBranchSlots);
   const operationsEfficiency = state.background === "Operations" ? .9 : 1;
-  const annualPayroll = (employees.reduce((sum, employee) => sum + employee.salary, 0) + allocatedUnnamedEmployees * 52_000) * operationsEfficiency;
+  const delegated = branch.managerControl !== false && Boolean(manager);
+  const managerEfficiency = delegated && manager ? clamp(1.08 - (manager.skill + manager.leadership) / 1_000, .91, 1.02) : 1.04;
+  const cooEfficiency = delegated && coo ? clamp(1.04 - (coo.skill + coo.leadership) / 2_200, .955, 1) : 1;
+  const recoveryEfficiency = branch.recoveryPlan?.status === "active" && state.day <= branch.recoveryPlan.deadlineDay ? .94 : 1;
+  const priorityEfficiency = (branch.operatingPriority ?? "balanced") === "profitability" ? .92 : 1;
+  const localEfficiency = managerEfficiency * cooEfficiency * recoveryEfficiency * priorityEfficiency;
+  const annualPayroll = (employees.reduce((sum, employee) => sum + employee.salary, 0) + allocatedUnnamedEmployees * 52_000) * operationsEfficiency * localEfficiency;
   const payroll = round(annualPayroll / 12);
   const priority = branch.operatingPriority ?? "balanced";
   const requestedMarketing = branch.managerBudget ?? 0;
   const marketingCap = priority === "profitability" ? 10_000 : priority === "balanced" ? 25_000 : priority === "deposits" || priority === "business" ? 35_000 : 60_000;
   const marketing = Math.min(requestedMarketing, marketingCap);
-  const operations = 6_000 + branch.level * 2_500 + employees.length * 600;
+  const operations = round((6_000 + branch.level * 2_500 + employees.length * 600) * localEfficiency);
   const rent = round(branch.monthlyRent);
   const cost = round(rent + payroll + marketing + operations);
   const customers = branch.localCustomers ?? Math.min(branch.capacity, 220 + branch.level * 85);
@@ -139,7 +148,13 @@ function runBranchAccounting(state: GameState): GameState {
     const mandate = branch.managerMandate ?? "manual";
     const mandateEffect = mandate === "growth" ? 1.15 : mandate === "autonomous" ? 1.08 : mandate === "guarded" ? 1.03 : .98;
     const profileDemand = demandForProfile(branch, district);
-    const targetCustomers = Math.min(branch.capacity, round((district.population * .006 + profileDemand * 3.1) * managerQuality * mandateEffect * (1 - district.competition / 190)));
+    const localBranchCount = Math.max(1, balanced.branchOffices.filter((item) => item.districtId === branch.districtId).length);
+    const saturationEffect = 1 / (1 + Math.max(0, localBranchCount - 1) * .48);
+    const priority = branch.operatingPriority ?? "balanced";
+    const priorityEffect = priority === "growth" ? 1.16 : priority === "deposits" || priority === "business" ? 1.08 : priority === "profitability" ? 1.03 : 1;
+    const coo = balanced.employeeRoster.find((employee) => employee.executiveRole === "COO");
+    const recoveryEffect = branch.recoveryPlan?.status === "active" && balanced.day <= branch.recoveryPlan.deadlineDay && coo ? 1 + (coo.skill + coo.leadership) / 2_000 : 1;
+    const targetCustomers = Math.min(branch.capacity, round((district.population * .006 + profileDemand * 3.1) * managerQuality * mandateEffect * priorityEffect * recoveryEffect * saturationEffect * (1 - district.competition / 190)));
     const previousCustomers = branch.localCustomers ?? Math.min(branch.capacity, Math.max(120, round(targetCustomers * .78)));
     const localCustomers = clamp(round(previousCustomers * .72 + targetCustomers * .28), 20, branch.capacity);
     const updated = { ...branch, localCustomers };
@@ -278,9 +293,25 @@ function runCollectionsAutomation(state: GameState): GameState {
 function runCompetitorCycle(state: GameState): GameState {
   if (state.competitors.length === 0) return state;
   const cycle = Math.floor(state.day / 30);
+  if (state.day % 360 === 0 && state.competitors.length > 6 && seededValue(`${state.worldSeed}-${cycle}-market-exit`) > .68) {
+    const weakest = [...state.competitors].sort((a, b) => a.marketShare + a.reputation / 25 - (b.marketShare + b.reputation / 25))[0];
+    const move: CompetitorMove = { id: `move-exit-${weakest.id}-${state.day}`, day: state.day, competitorId: weakest.id, competitorName: weakest.name, type: "exit", title: `${weakest.name} withdrew from the market`, description: `${weakest.name} could not sustain its position and its remaining customers are now contestable.`, impact: 8 };
+    const exited = addEvent({
+      ...state,
+      competitors: state.competitors.filter((item) => item.id !== weakest.id),
+      competitorHistory: [{ id: weakest.id, name: weakest.name, day: state.day, reason: "withdrawn" as const }, ...state.competitorHistory].slice(0, 24),
+      competitorMoves: [move, ...state.competitorMoves].slice(0, 18),
+    }, createEvent(state.day, "neutral", move.title, move.description));
+    return normaliseMarketShares(exited);
+  }
   const competitor = state.competitors[cycle % state.competitors.length];
-  const moveIndex = Math.floor(seededValue(`${state.worldSeed}-${competitor.id}-${cycle}-competitor-move`) * 4);
-  const type: CompetitorMove["type"] = ["pricing", "branch", "digital", "talent"][moveIndex] as CompetitorMove["type"];
+  const moveTypes: CompetitorMove["type"][] = competitor.strategy === "digital" || competitor.strategy === "challenger"
+    ? ["digital", "product", "pricing", "service", "talent", "branch"]
+    : competitor.strategy === "business" || competitor.strategy === "premium"
+      ? ["product", "talent", "service", "pricing", "branch", "digital"]
+      : ["branch", "service", "pricing", "product", "talent", "digital"];
+  const moveIndex = Math.floor(seededValue(`${state.worldSeed}-${competitor.id}-${cycle}-competitor-move`) * moveTypes.length);
+  const type = moveTypes[moveIndex];
   let description = "";
   let impact = 0;
   const competitors = state.competitors.map((item) => {
@@ -300,25 +331,41 @@ function runCompetitorCycle(state: GameState): GameState {
       impact = 6;
       return { ...item, digitalLevel: clamp(item.digitalLevel + 4, 1, 100), reputation: clamp(item.reputation + 1, 1, 100) };
     }
+    if (type === "product") {
+      description = `${item.name} launched a product tailored to ${item.specialty?.toLowerCase() ?? "its core customer segment"}.`;
+      impact = 8;
+      return { ...item, customers: item.customers + 105, loans: item.loans + 950_000, deposits: item.deposits + 720_000, reputation: clamp(item.reputation + .7, 1, 100) };
+    }
+    if (type === "service") {
+      description = `${item.name} invested in faster decisions and customer service across its network.`;
+      impact = 6;
+      return { ...item, customers: item.customers + 72, reputation: clamp(item.reputation + 1.1, 1, 100), acquisitionPrice: item.acquisitionPrice + 250_000 };
+    }
     description = `${item.name} is recruiting experienced branch and risk employees from the market.`;
     impact = 5;
     return { ...item, reputation: clamp(item.reputation + .5, 1, 100) };
   });
-  const move: CompetitorMove = { id: `move-${competitor.id}-${state.day}`, day: state.day, competitorId: competitor.id, competitorName: competitor.name, type, title: `${competitor.name}: ${type} move`, description, impact };
+  const moveTitle = { pricing: "changed market pricing", branch: "expanded its network", digital: "upgraded digital banking", talent: "entered the talent market", product: "launched a segment product", service: "raised its service offer", entry: "entered the market", exit: "left the market" }[type];
+  const move: CompetitorMove = { id: `move-${competitor.id}-${state.day}`, day: state.day, competitorId: competitor.id, competitorName: competitor.name, type, title: `${competitor.name} ${moveTitle}`, description, impact };
   const task: CEOInboxTask = { id: `inbox-${move.id}`, createdDay: state.day, category: "market", title: move.title, summary: description, urgency: impact >= 8 ? "important" : "routine", page: "market", status: "open", ownerRole: "CMO", sourceId: move.id };
-  return pushTask({ ...state, competitors, competitorMoves: [move, ...state.competitorMoves].slice(0, 24), customers: Math.max(0, state.customers - Math.ceil(impact / 2)), customersLost: state.customersLost + Math.ceil(impact / 2), marketShare: Math.max(.05, state.marketShare - impact * .006) }, task);
+  return normaliseMarketShares(pushTask({ ...state, competitors, competitorMoves: [move, ...state.competitorMoves].slice(0, 18), customers: Math.max(1, state.customers - Math.ceil(impact / 2)), customersLost: state.customersLost + Math.ceil(impact / 2) }, task));
 }
 
 function generateOperationsInbox(state: GameState): GameState {
   let next = state;
+  const coo = state.employeeRoster.find((employee) => employee.executiveRole === "COO");
+  const cooMandate = state.executiveMandates.COO;
+  const cooOwnsManagers = Boolean(coo && state.cooNetworkPolicy.enabled && cooMandate.permissions.includes("branchManagers"));
+  const cooOwnsRecovery = Boolean(coo && state.cooNetworkPolicy.enabled && cooMandate.permissions.includes("transfers"));
+  const cooOwnsCapacity = Boolean(coo && state.cooNetworkPolicy.enabled && cooMandate.permissions.includes("localUpgrades"));
   for (const branch of state.branchOffices) {
     const capacityUse = (branch.localCustomers ?? 0) / Math.max(1, branch.capacity) * 100;
-    if (!branch.managerId) {
+    if (!branch.managerId && (!branch.managerControl || !cooOwnsManagers)) {
       next = pushTask(next, { id: `inbox-manager-${branch.id}-${state.day}`, createdDay: state.day, category: "network", title: `${branch.name} has no accountable manager`, summary: "Appoint a qualified manager before granting local authority.", urgency: "important", page: "network", status: "open", ownerRole: "COO", sourceId: `manager-${branch.id}` });
-    } else if (capacityUse > 92) {
+    } else if (capacityUse > 92 && (!branch.managerControl || !cooOwnsCapacity)) {
       next = pushTask(next, { id: `inbox-capacity-${branch.id}-${state.day}`, createdDay: state.day, category: "network", title: `${branch.name} is above safe capacity`, summary: `${capacityUse.toFixed(0)}% of service capacity is in use. Delegate a service mandate or approve an upgrade.`, urgency: "important", page: "network", status: "open", ownerRole: "COO", sourceId: `capacity-${branch.id}` });
-    } else if ((branch.lastMonthProfit ?? 0) < 0) {
-      next = pushTask(next, { id: `inbox-profit-${branch.id}-${state.day}`, createdDay: state.day, category: "network", title: `${branch.name} is loss-making`, summary: `The latest local result was -$${Math.abs(round((branch.lastMonthProfit ?? 0) / 1000))}k. Review product focus, staffing and manager authority.`, urgency: "important", page: "network", status: "open", ownerRole: "COO", sourceId: `profit-${branch.id}` });
+    } else if ((branch.lastMonthProfit ?? 0) < 0 && (!branch.managerControl || !cooOwnsRecovery)) {
+      next = pushTask(next, { id: `inbox-profit-${branch.id}-${state.day}`, createdDay: state.day, category: "network", title: `${branch.name} is loss-making`, summary: `The latest local result was −${state.currency} ${Math.abs(round((branch.lastMonthProfit ?? 0) / 1000))}k. Review product focus, staffing and manager authority.`, urgency: "important", page: "network", status: "open", ownerRole: "COO", sourceId: `profit-${branch.id}` });
     }
   }
   for (const collectionCase of state.collectionCases.filter((item) => !item.closed)) {
@@ -361,7 +408,8 @@ export function getBranchOpeningAssessment(state: GameState, districtId: string)
   const reasons: string[] = [];
   const stageAllowed = stageOrder.indexOf(state.campaignStage) >= stageOrder.indexOf(district.requiredStage);
   if (!stageAllowed) reasons.push(`Reach ${district.requiredStage} stage`);
-  if (state.branchOffices.some((branch) => branch.districtId === districtId)) reasons.push("A branch already operates here");
+  const existingBranches = state.branchOffices.filter((branch) => branch.districtId === districtId).length;
+  if (existingBranches >= Math.max(1, district.maxBranches ?? 1)) reasons.push("This market has reached its branch limit");
   if (state.projects.some((project) => project.districtId === districtId && project.status !== "completed")) reasons.push("An expansion project is already active here");
   const upfront = round(district.openingCost * .3);
   const financedAmount = district.openingCost - upfront;

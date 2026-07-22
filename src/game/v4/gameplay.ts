@@ -48,12 +48,15 @@ function completeProject(state: GameState, project: BankProject): GameState {
   if (project.kind === "branch" && project.districtId && project.profile) {
     const district = state.districts.find((item) => item.id === project.districtId);
     if (district) {
+      const existingLocations = state.branchOffices.filter((branch) => branch.districtId === district.id).length;
+      const profileLabel = project.profile === "mortgage" ? "Mortgage Centre" : project.profile === "wealth" ? "Private Bank" : project.profile === "business" ? "Business Hub" : "Branch";
+      const branchName = `${district.city ?? district.name} ${profileLabel}${existingLocations > 0 ? ` ${existingLocations + 1}` : ""}`;
       next = {
         ...next,
         branchOffices: [...next.branchOffices, {
           id: `branch-${district.id}-${state.day}`,
           districtId: district.id,
-          name: `${district.name} Branch`,
+          name: branchName,
           level: 1,
           profile: project.profile,
           capacity: 650,
@@ -62,6 +65,17 @@ function completeProject(state: GameState, project: BankProject): GameState {
           satisfaction: 72,
           openedDay: state.day,
           managerId: null,
+          managerMandate: "manual",
+          localFocus: "service",
+          managerBudget: 0,
+          managerControl: true,
+          operatingPriority: "balanced",
+          upgradeAuthority: "profitable",
+          pendingUpgradeRecommendation: false,
+          portfolioStatus: "review",
+          recoveryPlan: null,
+          underperformingMonths: 0,
+          cooLastReviewDay: state.day,
         }],
         branches: next.branches + 1,
         employees: next.employees + 3,
@@ -274,7 +288,7 @@ export function advanceDaysRefined(state: GameState, days: number): GameState {
 
 export function startBranchProject(state: GameState, districtId: string, profile: BranchProfile): GameState {
   const district = state.districts.find((item) => item.id === districtId);
-  if (!district || stageRank(state.campaignStage) < stageRank(district.requiredStage) || state.branchOffices.some((branch) => branch.districtId === districtId) || state.projects.some((project) => project.districtId === districtId && project.status !== "completed")) return state;
+  if (!district || stageRank(state.campaignStage) < stageRank(district.requiredStage) || state.branchOffices.filter((branch) => branch.districtId === districtId).length >= Math.max(1, district.maxBranches ?? 1) || state.projects.some((project) => project.districtId === districtId && project.status !== "completed")) return state;
   const duration = 75 + round(district.competition * 0.35);
   if (state.cash < district.openingCost) return state;
   const project: BankProject = { id: `project-branch-${districtId}-${state.day}`, name: `Open ${district.name}`, kind: "branch", status: "active", startDay: state.day, durationDays: duration, remainingDays: duration, budget: district.openingCost, spent: 0, risk: 22 + district.competition * 0.35, districtId, profile };

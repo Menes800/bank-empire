@@ -1,14 +1,18 @@
 import { PRODUCT_CATALOG, SERVICE_REASSIGNMENT } from "./catalog";
 import type { BranchOffice, Competitor, GameState, LendingPolicy, ProductKey } from "./types";
 import { addEvent, calculateRatios, clamp, createEvent, round, seededValue } from "./utils";
+import { normaliseMarketShares } from "./simulation";
 
 function acquiredBranchOffices(state: GameState, competitor: Competitor): BranchOffice[] {
   if (competitor.branches <= 0 || state.districts.length === 0) return [];
-  const occupied = new Set(state.branchOffices.map((branch) => branch.districtId));
-  const districts = [
-    ...state.districts.filter((district) => !occupied.has(district.id)),
-    ...state.districts.filter((district) => occupied.has(district.id)),
-  ];
+  const occupied = new Map<string, number>();
+  for (const branch of state.branchOffices) occupied.set(branch.districtId, (occupied.get(branch.districtId) ?? 0) + 1);
+  const districts = state.districts
+    .flatMap((district) => Array.from({
+      length: Math.max(0, Math.max(1, district.maxBranches ?? 1) - (occupied.get(district.id) ?? 0)),
+    }, () => district))
+    .sort((a, b) => (occupied.get(a.id) ?? 0) - (occupied.get(b.id) ?? 0));
+  if (districts.length === 0) return [];
   const localCustomers = Math.ceil(competitor.customers / competitor.branches);
   const capacity = Math.max(650, Math.ceil(localCustomers * 1.15 / 50) * 50);
   const profile = competitor.strategy === "premium"
@@ -19,12 +23,17 @@ function acquiredBranchOffices(state: GameState, competitor: Competitor): Branch
         ? "business" as const
         : "retail" as const;
 
-  return Array.from({ length: competitor.branches }, (_, index) => {
-    const district = districts[index % districts.length];
+  const names = new Map<string, number>();
+  return Array.from({ length: Math.min(competitor.branches, districts.length) }, (_, index) => {
+    const district = districts[index];
+    const profileLabel = profile === "mortgage" ? "Mortgage Centre" : profile === "wealth" ? "Private Bank" : profile === "business" ? "Business Hub" : "Branch";
+    const baseName = `${district.city ?? district.name} ${profileLabel}`;
+    const occurrence = (names.get(baseName) ?? 0) + 1;
+    names.set(baseName, occurrence);
     return {
       id: `branch-acquired-${competitor.id}-${state.day}-${index + 1}`,
       districtId: district.id,
-      name: `${competitor.name} ${index + 1}`,
+      name: occurrence === 1 ? baseName : `${baseName} ${occurrence}`,
       level: 1,
       profile,
       capacity,
@@ -40,6 +49,10 @@ function acquiredBranchOffices(state: GameState, competitor: Competitor): Branch
       operatingPriority: "balanced",
       upgradeAuthority: "manual",
       pendingUpgradeRecommendation: false,
+      portfolioStatus: "review",
+      recoveryPlan: null,
+      underperformingMonths: 0,
+      cooLastReviewDay: state.day,
       localCustomers: Math.min(capacity, localCustomers),
       localDeposits: round(competitor.deposits / competitor.branches),
       localLoans: round(competitor.loans / competitor.branches),
@@ -482,7 +495,7 @@ export function acquireCompetitor(
     return state;
   const acquiredBranches = acquiredBranchOffices(state, competitor);
   const branchOffices = [...state.branchOffices, ...acquiredBranches];
-  return addEvent(
+  const acquired = addEvent(
     {
       ...state,
       cash:
@@ -503,6 +516,10 @@ export function acquireCompetitor(
       reputation: clamp(state.reputation + 4, 1, 100),
       brandStrength: clamp(state.brandStrength + 5, 1, 100),
       competitors: state.competitors.filter((item) => item.id !== competitorId),
+      competitorHistory: [
+        { id: competitor.id, name: competitor.name, day: state.day, reason: "acquired" as const, buyer: state.bankName },
+        ...state.competitorHistory,
+      ].slice(0, 24),
     },
     createEvent(
       state.day,
@@ -511,6 +528,7 @@ export function acquireCompetitor(
       "Its customer portfolio, lending book, deposits and branches joined the group.",
     ),
   );
+  return normaliseMarketShares(acquired);
 }
 
 export function raiseEquityCapital(state: GameState): GameState {

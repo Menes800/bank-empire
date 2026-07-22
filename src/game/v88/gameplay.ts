@@ -1,9 +1,10 @@
 import { deriveCampaignStage } from "../v4/gameplay";
+import { generateDistrictsForMarket } from "../v4/catalog";
 import { advanceDaysV8 } from "../v8/gameplay";
 import { delegateInboxTask, takeCollectionAction } from "../v7/gameplay";
 import type { BankProject, BranchProfile, CampaignStage, ExecutiveMandate, ExecutivePermission, ExecutiveRole, GameEvent, GameState, ManagementLogEntry, MandatePreset } from "../types";
 import { addEvent, clamp, createEvent, round } from "../utils";
-import { generateCandidateMarket, seededValue } from "./generation";
+import { generateCandidateMarket, generateCompetitorEntrant, seededValue } from "./generation";
 
 export type BranchFundingMode = "cash" | "financed";
 const roles: ExecutiveRole[] = ["CFO", "COO", "CRO", "CMO", "CTO"];
@@ -78,11 +79,14 @@ export function getExpansionAssessmentV88(state: GameState, districtId: string) 
   const game = repairCampaignState(state);
   const district = game.districts.find((item) => item.id === districtId);
   if (!district) return { allowed: false, cashAllowed: false, financeAllowed: false, status: "missing" as const, reasons: ["Market not found"], cashReasons: ["Market not found"], financeReasons: ["Market not found"], upfront: 0, financedAmount: 0 };
-  const occupied = game.branchOffices.some((branch) => branch.districtId === districtId);
+  const existingBranches = game.branchOffices.filter((branch) => branch.districtId === districtId).length;
+  const maxBranches = Math.max(1, district.maxBranches ?? 1);
+  const occupied = existingBranches > 0;
+  const atCapacity = existingBranches >= maxBranches;
   const activeProject = game.projects.some((project) => project.districtId === districtId && project.status !== "completed");
   const stageLocked = stageOrder.indexOf(game.campaignStage) < stageOrder.indexOf(district.requiredStage);
   const hard: string[] = [];
-  if (occupied) hard.push("A branch already operates in this market");
+  if (atCapacity) hard.push(`This market has reached its limit of ${maxBranches} branch${maxBranches === 1 ? "" : "es"}`);
   if (activeProject) hard.push("An expansion project is already active here");
   if (stageLocked) hard.push(`Unlock ${district.requiredStage} stage`, ...stageRequirements(district.requiredStage, game));
   const upfront = round(district.openingCost * .3);
@@ -95,7 +99,7 @@ export function getExpansionAssessmentV88(state: GameState, districtId: string) 
   if (game.liquidityRatio < 12) financeReasons.push(`Liquidity 12% required (${game.liquidityRatio.toFixed(1)}% now)`);
   const cashAllowed = cashReasons.length === 0;
   const financeAllowed = financeReasons.length === 0;
-  return { allowed: cashAllowed || financeAllowed, cashAllowed, financeAllowed, status: occupied ? "owned" as const : activeProject ? "project" as const : stageLocked ? "locked" as const : cashAllowed || financeAllowed ? "available" as const : "funding" as const, reasons: [...new Set([...cashReasons, ...financeReasons])], cashReasons, financeReasons, upfront, financedAmount };
+  return { allowed: cashAllowed || financeAllowed, cashAllowed, financeAllowed, status: atCapacity ? "owned" as const : activeProject ? "project" as const : stageLocked ? "locked" as const : cashAllowed || financeAllowed ? "available" as const : "funding" as const, reasons: [...new Set([...cashReasons, ...financeReasons])], cashReasons, financeReasons, upfront, financedAmount, existingBranches, maxBranches, occupied };
 }
 
 export function startBranchProjectV88(state: GameState, districtId: string, profile: BranchProfile, fundingMode: BranchFundingMode): GameState {
@@ -135,16 +139,110 @@ function hydrateMandates(state: GameState): Record<ExecutiveRole, ExecutiveManda
   return roles.reduce((all, role) => { const current = state.executiveMandates?.[role]; all[role] = current ? { ...defaults[role], ...current, permissions: current.permissions ?? defaults[role].permissions, alwaysEscalate: current.alwaysEscalate ?? defaults[role].alwaysEscalate } : defaults[role]; return all; }, {} as Record<ExecutiveRole, ExecutiveMandate>);
 }
 
+function hydrateDistricts(state: GameState) {
+  const generated = generateDistrictsForMarket(state.homeMarket ?? "NO");
+  const current = new Map((state.districts ?? []).map((district) => [district.id, district]));
+  return generated.map((district) => {
+    const saved = current.get(district.id);
+    return saved ? {
+      ...district,
+      ...saved,
+      name: district.name,
+      city: district.city,
+      region: district.region,
+      description: district.description,
+      maxBranches: district.maxBranches,
+      mapX: district.mapX,
+      mapY: district.mapY,
+    } : district;
+  });
+}
+
+function hydrateCompetitors(state: GameState) {
+  const competitors = [...(state.competitors ?? [])];
+  const entrants: GameState["competitors"] = [];
+  while (competitors.length < 7) {
+    const entrantIndex = competitors.length + (state.competitorHistory?.length ?? 0);
+    const entrant = generateCompetitorEntrant(state.worldSeed, state.homeMarket ?? "NO", state.day, entrantIndex, competitors.map((item) => item.name));
+    competitors.push(entrant);
+    entrants.push(entrant);
+  }
+  const totalCustomers = Math.max(1, state.customers + competitors.reduce((sum, competitor) => sum + Math.max(0, competitor.customers), 0));
+  return {
+    competitors: competitors.slice(0, 8).map((competitor) => ({ ...competitor, marketShare: Math.max(0, competitor.customers) / totalCustomers * 100 })),
+    entrants,
+  };
+}
+
+function hydrateBranchNetwork(state: GameState, districts: GameState["districts"]) {
+  const districtById = new Map(districts.map((district) => [district.id, district]));
+  const counts = new Map<string, number>();
+  const nameCounts = new Map<string, number>();
+  const availableDistricts = districts.flatMap((district) => Array.from({ length: Math.max(1, district.maxBranches) }, () => district.id));
+  let slotCursor = 0;
+
+  return state.branchOffices.map((branch) => {
+    let districtId = districtById.has(branch.districtId) ? branch.districtId : districts[0]?.id ?? branch.districtId;
+    const district = districtById.get(districtId);
+    const currentCount = counts.get(districtId) ?? 0;
+    if (branch.id.startsWith("branch-acquired-") && district && currentCount >= district.maxBranches) {
+      const nextDistrict = availableDistricts.slice(slotCursor).find((id) => (counts.get(id) ?? 0) < (districtById.get(id)?.maxBranches ?? 1));
+      if (nextDistrict) {
+        districtId = nextDistrict;
+        slotCursor = Math.max(slotCursor, availableDistricts.indexOf(nextDistrict));
+      }
+    }
+    counts.set(districtId, (counts.get(districtId) ?? 0) + 1);
+    const assignedDistrict = districtById.get(districtId);
+    const profileLabel = branch.profile === "mortgage" ? "Mortgage Centre" : branch.profile === "wealth" ? "Private Bank" : branch.profile === "business" ? "Business Hub" : "Branch";
+    const naturalName = `${assignedDistrict?.city ?? assignedDistrict?.name ?? branch.name} ${profileLabel}`;
+    const occurrence = (nameCounts.get(naturalName) ?? 0) + 1;
+    nameCounts.set(naturalName, occurrence);
+    return {
+      ...branch,
+      districtId,
+      name: branch.id.startsWith("branch-acquired-") ? `${naturalName}${occurrence > 1 ? ` ${occurrence}` : ""}` : branch.name,
+      portfolioStatus: branch.portfolioStatus ?? "stable",
+      recoveryPlan: branch.recoveryPlan ?? null,
+      underperformingMonths: branch.underperformingMonths ?? 0,
+      cooLastReviewDay: branch.cooLastReviewDay ?? 0,
+    };
+  });
+}
+
 export function repairCampaignState(state: GameState): GameState {
   const current = Math.max(0, stageOrder.indexOf(state.campaignStage));
   const derived = Math.max(0, stageOrder.indexOf(deriveCampaignStage(state)));
   const worldSeed = state.worldSeed || Math.abs(Math.round(seededValue(`${state.bankName}-${state.founderName}`) * 2_000_000_000));
   const candidates = state.candidatePool?.length >= 10 ? state.candidatePool : [...(state.candidatePool ?? []), ...generateCandidateMarket(worldSeed, state.homeMarket ?? "NO", state.nameStyle ?? "mixed", state.day, 18)].filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index).slice(0, 20);
+  const districts = hydrateDistricts(state);
+  const field = hydrateCompetitors(state);
+  const competitors = field.competitors;
+  const branchOffices = hydrateBranchNetwork(state, districts);
+  const totalMarketCustomers = Math.max(1, state.customers + competitors.reduce((sum, competitor) => sum + competitor.customers, 0));
+  const policy = state.cooNetworkPolicy;
   const next: GameState = {
     ...state, version: 88, currency: state.currency ?? "NOK", homeMarket: state.homeMarket ?? "NO", locale: state.locale ?? "nb-NO", nameStyle: state.nameStyle ?? "mixed",
     bankMark: state.bankMark || state.bankName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(), slogan: state.slogan ?? "Built for lasting trust.", firstBranchName: state.firstBranchName ?? state.branchOffices[0]?.name ?? "Central Branch", founderStory: state.founderStory ?? "Built from one branch, disciplined growth and clear accountability.", worldSeed,
     campaignStage: stageOrder[Math.max(current, derived)], executiveMandates: hydrateMandates(state), managementLog: state.managementLog ?? [], candidatePool: candidates,
-    branchOffices: state.branchOffices.map((branch, index) => index === 0 && state.firstBranchName && branch.openedDay === 1 ? { ...branch, name: state.firstBranchName } : branch), events: consolidateEvents(state.events ?? []),
+    cooNetworkPolicy: {
+      enabled: policy?.enabled ?? true,
+      priority: policy?.priority ?? "profitability",
+      investmentLimit: policy?.investmentLimit ?? 1_500_000,
+      reviewDays: policy?.reviewDays ?? 90,
+      breakEvenDays: policy?.breakEvenDays ?? 180,
+      autoHireManagers: policy?.autoHireManagers ?? true,
+    },
+    districts,
+    branchOffices: branchOffices.map((branch, index) => index === 0 && state.firstBranchName && branch.openedDay === 1 ? { ...branch, name: state.firstBranchName } : branch),
+    competitors,
+    competitorHistory: (state.competitorHistory ?? []).slice(0, 24),
+    competitorMoves: [
+      ...field.entrants.map((entrant) => ({ id: `move-entry-${entrant.id}-${state.day}`, day: state.day, competitorId: entrant.id, competitorName: entrant.name, type: "entry" as const, title: `${entrant.name} entered the market`, description: `${entrant.name} launched as a ${entrant.strategy} bank focused on ${entrant.specialty?.toLowerCase() ?? "a defined customer segment"}.`, impact: 4 })),
+      ...(state.competitorMoves ?? []),
+    ].slice(0, 18),
+    marketShare: state.customers / totalMarketCustomers * 100,
+    events: consolidateEvents(state.events ?? []),
   };
   return completeObjectives(next);
 }
