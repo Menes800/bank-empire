@@ -113,14 +113,17 @@ function updateCompetitors(state: GameState, marketMood: number, random: () => n
           ? 0.5
           : competitor.strategy === "premium"
             ? competitor.reputation / 220
-            : 0.24;
-    const gained = Math.max(
-      0,
-      round((0.7 + strategyGrowth) * marketMood * randomBetween(0.65, 1.35, random)),
-    );
+            : competitor.strategy === "challenger"
+              ? 0.62
+              : competitor.strategy === "business"
+                ? 0.43
+                : competitor.strategy === "community"
+                  ? 0.34
+                  : 0.24;
+    const gained = round((0.7 + strategyGrowth) * marketMood * randomBetween(-0.28, 1.35, random));
     const deposits =
-      competitor.deposits + gained * randomBetween(8_000, 24_000, random);
-    const loans = competitor.loans + gained * randomBetween(4_000, 16_000, random);
+      Math.max(1_000_000, competitor.deposits + gained * randomBetween(8_000, 24_000, random));
+    const loans = Math.max(500_000, competitor.loans + gained * randomBetween(4_000, 16_000, random));
     const reputation = clamp(
       competitor.reputation + randomBetween(-0.04, 0.06, random),
       35,
@@ -129,7 +132,7 @@ function updateCompetitors(state: GameState, marketMood: number, random: () => n
     const reprice = state.day % 30 === 0 ? randomBetween(-0.15, 0.15, random) : 0;
     return {
       ...competitor,
-      customers: competitor.customers + gained,
+      customers: Math.max(250, competitor.customers + gained),
       deposits,
       loans,
       reputation,
@@ -142,6 +145,18 @@ function updateCompetitors(state: GameState, marketMood: number, random: () => n
         ) * 100_000,
     };
   });
+}
+
+export function normaliseMarketShares(state: GameState): GameState {
+  const totalCustomers = Math.max(1, state.customers + state.competitors.reduce((sum, competitor) => sum + Math.max(0, competitor.customers), 0));
+  return {
+    ...state,
+    marketShare: state.customers / totalCustomers * 100,
+    competitors: state.competitors.map((competitor) => ({
+      ...competitor,
+      marketShare: Math.max(0, competitor.customers) / totalCustomers * 100,
+    })),
+  };
 }
 
 export function advanceDay(state: GameState): GameState {
@@ -392,11 +407,8 @@ export function advanceDay(state: GameState): GameState {
     satisfaction,
   );
 
-  const totalKnownMarket =
-    customers +
-    competitors.reduce((sum, competitor) => sum + competitor.customers, 0) +
-    28_000;
-  const marketShare = clamp((customers / totalKnownMarket) * 100, 0.1, 55);
+  const totalKnownMarket = Math.max(1, customers + competitors.reduce((sum, competitor) => sum + competitor.customers, 0));
+  const marketShare = customers / totalKnownMarket * 100;
   const competitorsWithShare = competitors.map((competitor) => ({
     ...competitor,
     marketShare: (competitor.customers / totalKnownMarket) * 100,

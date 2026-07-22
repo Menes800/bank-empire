@@ -9,19 +9,22 @@ import {
 import {
   PROGRAMMES_V89,
   approveBranchUpgradeV89,
-  branchMetricsV89,
+  getCooPortfolioSummaryV89,
   getBranchDiagnosisV89,
   getBranchUpgradePlanV89,
   getProgrammeAssessmentV89,
+  setCooNetworkPolicyV89,
   startProgrammeV89,
 } from "../../game/v89/gameplay";
 import type { BranchProfile, GameState, UpgradeAuthority } from "../../game/store";
-import type { BranchFocus, BranchOffice, BranchPriority, District } from "../../game/types";
+import type { BranchFocus, BranchPortfolioStatus, BranchPriority, District } from "../../game/types";
 import type { GameAction } from "../common";
 import { money } from "../format";
 
 type NetworkTab = "network" | "map" | "programmes";
 type BranchMode = "balanced" | "growth" | "service" | "deposits" | "lending" | "business" | "profitability";
+type BranchFilter = "all" | BranchPortfolioStatus | "vacant";
+type BranchSort = "attention" | "loss" | "capacity" | "customers" | "name";
 
 const profiles: BranchProfile[] = ["retail", "mortgage", "business", "wealth"];
 const profileNames: Record<BranchProfile, string> = {
@@ -29,15 +32,6 @@ const profileNames: Record<BranchProfile, string> = {
   mortgage: "Mortgage centre",
   business: "Business hub",
   wealth: "Private banking office",
-};
-const districtShapes: Record<string, string> = {
-  industrial: "M4 10 L29 7 L36 28 L27 45 L5 40 Z",
-  coast: "M29 4 L64 5 L67 25 L51 34 L35 28 Z",
-  university: "M66 7 L94 10 L96 38 L76 43 L65 27 Z",
-  central: "M35 29 L65 26 L76 44 L67 63 L39 61 L27 45 Z",
-  harbour: "M4 42 L28 46 L40 63 L34 91 L7 88 L2 66 Z",
-  garden: "M40 63 L67 64 L78 88 L54 97 L34 91 Z",
-  ridge: "M68 45 L96 40 L98 85 L79 89 L67 63 Z",
 };
 const branchModes: { key: BranchMode; label: string; detail: string; priority: BranchPriority; focus: BranchFocus }[] = [
   { key: "balanced", label: "Balanced", detail: "Protect service and steady results", priority: "balanced", focus: "service" },
@@ -64,17 +58,15 @@ function bestProfile(district: District): BranchProfile {
   const scores: Record<BranchProfile, number> = { retail: district.retailDemand, mortgage: district.mortgageDemand, business: district.businessDemand, wealth: district.wealthDemand };
   return profiles.reduce((best, item) => scores[item] > scores[best] ? item : best, "retail");
 }
-function branchStatus(game: GameState, branch: BranchOffice) {
-  const metrics = branchMetricsV89(game, branch);
-  if (!branch.managerId) return { key: "vacant", label: "Needs manager" };
-  if (metrics.profit < 0) return { key: "loss", label: "Loss-making" };
-  if (metrics.capacityUse > 92) return { key: "pressure", label: "Capacity pressure" };
-  return { key: "healthy", label: "Healthy" };
-}
+const portfolioLabels: Record<BranchPortfolioStatus, string> = { growth: "Growth", stable: "Stable", turnaround: "Turnaround", review: "CEO review" };
 
 export function NetworkPageV89({ game, action }: { game: GameState; action: GameAction }) {
   const [tab, setTab] = useState<NetworkTab>("network");
   const [selectedBranchId, setSelectedBranchId] = useState(game.branchOffices[0]?.id ?? "");
+  const [branchSearch, setBranchSearch] = useState("");
+  const [branchFilter, setBranchFilter] = useState<BranchFilter>("all");
+  const [branchSort, setBranchSort] = useState<BranchSort>("attention");
+  const [selectedRegion, setSelectedRegion] = useState("all");
   const [selectedDistrictId, setSelectedDistrictId] = useState(
     game.districts.find((item) => getExpansionAssessmentV88(game, item.id).status === "available")?.id ?? game.districts[0]?.id ?? "",
   );
@@ -85,25 +77,42 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
   const district = game.districts.find((item) => item.id === selectedDistrictId) ?? game.districts[0];
   const districtAssessment = district ? getExpansionAssessmentV88(game, district.id) : null;
   const managers = game.employeeRoster.filter((employee) => !employee.executiveRole && employee.leadership >= 45);
-  const portfolio = useMemo(() => game.branchOffices.map((branch) => ({
-    branch,
-    metrics: branchMetricsV89(game, branch),
-    status: branchStatus(game, branch),
-    manager: game.employeeRoster.find((employee) => employee.id === branch.managerId),
-  })), [game]);
-  const totalProfit = portfolio.reduce((sum, item) => sum + item.metrics.profit, 0);
+  const summary = useMemo(() => getCooPortfolioSummaryV89(game), [game]);
+  const portfolio = useMemo(() => summary.branches.map((item) => ({
+    ...item,
+    manager: game.employeeRoster.find((employee) => employee.id === item.branch.managerId),
+  })), [summary, game.employeeRoster]);
+  const visiblePortfolio = useMemo(() => {
+    const query = branchSearch.trim().toLowerCase();
+    const filtered = portfolio.filter(({ branch, status, manager }) => {
+      const matchesSearch = !query || `${branch.name} ${manager?.name ?? ""} ${branch.profile}`.toLowerCase().includes(query);
+      const matchesFilter = branchFilter === "all" || branchFilter === "vacant" ? branchFilter === "all" || !branch.managerId : status === branchFilter;
+      return matchesSearch && matchesFilter;
+    });
+    const attentionRank: Record<BranchPortfolioStatus, number> = { review: 0, turnaround: 1, growth: 2, stable: 3 };
+    return [...filtered].sort((a, b) => branchSort === "loss" ? a.metrics.profit - b.metrics.profit
+      : branchSort === "capacity" ? b.metrics.capacityUse - a.metrics.capacityUse
+        : branchSort === "customers" ? b.metrics.customers - a.metrics.customers
+          : branchSort === "name" ? a.branch.name.localeCompare(b.branch.name)
+            : attentionRank[a.status] - attentionRank[b.status] || a.metrics.profit - b.metrics.profit);
+  }, [portfolio, branchSearch, branchFilter, branchSort]);
+  const totalProfit = summary.totalProfit;
   const totalCustomers = portfolio.reduce((sum, item) => sum + item.metrics.customers, 0);
   const totalCapacity = portfolio.reduce((sum, item) => sum + item.branch.capacity, 0);
-  const attention = portfolio.filter((item) => item.status.key !== "healthy").length;
-  const vacancies = portfolio.filter((item) => !item.branch.managerId).length;
+  const attention = summary.counts.turnaround + summary.counts.review;
+  const vacancies = summary.vacancies;
   const activeProjects = game.projects.filter((project) => project.status !== "completed");
+  const coo = game.employeeRoster.find((employee) => employee.executiveRole === "COO");
+  const latestCooReview = game.managementLog.find((entry) => entry.role === "COO" && entry.title === "Monthly branch portfolio review");
+  const regions = useMemo(() => [...new Set(game.districts.map((item) => item.region))], [game.districts]);
+  const visibleDistricts = selectedRegion === "all" ? game.districts : game.districts.filter((item) => item.region === selectedRegion);
   const currentMode = selectedBranch
     ? branchModes.find((item) => item.priority === (selectedBranch.operatingPriority ?? "balanced") && item.focus === (selectedBranch.localFocus ?? "service"))?.key ?? "balanced"
     : "balanced";
 
   const chooseDistrict = (item: District) => {
-    if (getExpansionAssessmentV88(game, item.id).status === "locked") return;
     setSelectedDistrictId(item.id);
+    setSelectedRegion(item.region);
     setProfile(bestProfile(item));
   };
   const setMode = (branchId: string, key: BranchMode) => {
@@ -118,7 +127,7 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
 
   return <>
     <section className="v89-network-hero">
-      <div><p className="eyebrow light">BRANCH NETWORK</p><h2>Manage economics, capacity and accountability</h2><p>Branch managers run daily operations. The COO owns recovery plans, staffing and upgrades inside the executive mandate.</p></div>
+      <div><p className="eyebrow light">BRANCH NETWORK</p><h2>Run the network through your COO</h2><p>Managers own daily operations. The COO handles staffing, resource moves and recovery plans; the CEO decides openings, closures and investments above mandate.</p></div>
       <button className="primary" onClick={() => setTab("map")}>Open city map</button>
     </section>
 
@@ -131,6 +140,21 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
       <Headline label="Active delivery" value={`${activeProjects.length}`} />
     </section>
 
+    <article className="panel v813-coo-command">
+      <header>
+        <div><p className="eyebrow">COO NETWORK MANDATE</p><h3>{coo ? `${coo.name} · portfolio owner` : "COO position vacant"}</h3><p>{latestCooReview?.detail ?? "The first consolidated portfolio report is produced at the next monthly close."}</p></div>
+        <label className="v89-delegated-toggle"><input type="checkbox" checked={game.cooNetworkPolicy.enabled} disabled={!coo} onChange={(event) => action((state) => setCooNetworkPolicyV89(state, { enabled: event.target.checked }))} /><span><strong>{game.cooNetworkPolicy.enabled ? "COO control active" : "CEO manual control"}</strong><small>Routine branch actions stay inside the approved mandate.</small></span></label>
+      </header>
+      <div className="v813-coo-policy-grid">
+        <label><span><strong>Network priority</strong><small>Guides staffing and recovery choices.</small></span><select value={game.cooNetworkPolicy.priority} onChange={(event) => action((state) => setCooNetworkPolicyV89(state, { priority: event.target.value as GameState["cooNetworkPolicy"]["priority"] }))}><option value="profitability">Profitability first</option><option value="balanced">Balanced network</option><option value="growth">Controlled growth</option></select></label>
+        <label><span><strong>Investment ceiling</strong><small>COO cannot approve more per branch.</small></span><input type="number" min="0" step="100000" value={game.cooNetworkPolicy.investmentLimit} onChange={(event) => action((state) => setCooNetworkPolicyV89(state, { investmentLimit: Number(event.target.value) }))} /></label>
+        <label><span><strong>Recovery review</strong><small>First formal checkpoint.</small></span><select value={game.cooNetworkPolicy.reviewDays} onChange={(event) => action((state) => setCooNetworkPolicyV89(state, { reviewDays: Number(event.target.value) }))}><option value="60">60 days</option><option value="90">90 days</option><option value="120">120 days</option></select></label>
+        <label><span><strong>Break-even deadline</strong><small>Then closure or relocation reaches CEO.</small></span><select value={game.cooNetworkPolicy.breakEvenDays} onChange={(event) => action((state) => setCooNetworkPolicyV89(state, { breakEvenDays: Number(event.target.value) }))}><option value="120">4 months</option><option value="180">6 months</option><option value="270">9 months</option></select></label>
+        <label className="v813-auto-hire"><input type="checkbox" checked={game.cooNetworkPolicy.autoHireManagers} onChange={(event) => action((state) => setCooNetworkPolicyV89(state, { autoHireManagers: event.target.checked }))} /><span><strong>Recruit branch managers</strong><small>Maximum two external appointments per monthly review, inside salary authority.</small></span></label>
+      </div>
+      <div className="v813-portfolio-buckets"><span className="growth"><small>Growth</small><strong>{summary.counts.growth}</strong></span><span className="stable"><small>Stable</small><strong>{summary.counts.stable}</strong></span><span className="turnaround"><small>Turnaround</small><strong>{summary.counts.turnaround}</strong></span><span className="review"><small>CEO review</small><strong>{summary.counts.review}</strong></span><span><small>Next recovery review</small><strong>{summary.nextReviewDay ? `Day ${summary.nextReviewDay}` : "None active"}</strong></span></div>
+    </article>
+
     <nav className="v89-workspace-tabs panel">
       <Tab active={tab === "network"} label="Branch performance" count={game.branchOffices.length} onClick={() => setTab("network")} />
       <Tab active={tab === "map"} label="City & expansion" count={game.districts.length} onClick={() => setTab("map")} />
@@ -139,13 +163,15 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
 
     {tab === "network" && <section className="v89-network-workspace">
       <article className="panel v89-branch-list">
-        <div className="panel-heading"><div><p className="eyebrow">BRANCHES</p><h3>Performance and capacity</h3></div></div>
-        {portfolio.map(({ branch, metrics, status, manager }) => <button key={branch.id} className={selectedBranch?.id === branch.id ? "selected" : ""} onClick={() => setSelectedBranchId(branch.id)}>
+        <div className="panel-heading"><div><p className="eyebrow">BRANCHES</p><h3>{visiblePortfolio.length} of {portfolio.length} locations</h3></div></div>
+        <div className="v813-branch-tools"><input type="search" value={branchSearch} onChange={(event) => setBranchSearch(event.target.value)} placeholder="Search branch or manager" /><select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value as BranchFilter)}><option value="all">All statuses</option><option value="growth">Growth</option><option value="stable">Stable</option><option value="turnaround">Turnaround</option><option value="review">CEO review</option><option value="vacant">Manager vacant</option></select><select value={branchSort} onChange={(event) => setBranchSort(event.target.value as BranchSort)}><option value="attention">Attention first</option><option value="loss">Largest loss</option><option value="capacity">Capacity use</option><option value="customers">Customers</option><option value="name">Name</option></select></div>
+        {visiblePortfolio.map(({ branch, metrics, status, manager }) => <button key={branch.id} className={selectedBranch?.id === branch.id ? "selected" : ""} onClick={() => setSelectedBranchId(branch.id)}>
           <div><strong>{branch.name}</strong><small>{profileNames[branch.profile]} · Level {branch.level}</small></div>
           <span><small>{manager?.name ?? "Manager vacant"}</small><b className={metrics.profit < 0 ? "negative" : "positive"}>{money.format(metrics.profit)}</b></span>
           <i><em style={{ width: `${Math.min(100, metrics.capacityUse)}%` }} /></i>
-          <b className={`branch-status ${status.key}`}>{status.label}</b>
+          <b className={`branch-status ${!branch.managerId ? "vacant" : status}`}>{!branch.managerId ? "Needs manager" : portfolioLabels[status]}</b>
         </button>)}
+        {visiblePortfolio.length === 0 && <div className="v89-compact-empty"><strong>No branches match these filters</strong><span>Clear the search or choose another portfolio status.</span></div>}
       </article>
 
       {selectedBranch && diagnosis && <div className="v89-branch-detail">
@@ -160,6 +186,7 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
             <Metric label="Loans" value={money.format(diagnosis.metrics.loans)} />
           </div>
           <div className={`v812-break-even ${diagnosis.metrics.profit < 0 ? "warning" : "good"}`}><span><small>BREAK-EVEN</small><strong>{diagnosis.breakEvenCustomers.toLocaleString(game.locale)} customers</strong></span><p>{diagnosis.customersToBreakEven > 0 ? `${diagnosis.customersToBreakEven.toLocaleString(game.locale)} more customers are needed at the current revenue and cost mix.` : "This branch is operating above break-even."}</p></div>
+          {selectedBranch.recoveryPlan && <div className={`v813-recovery-strip ${selectedBranch.recoveryPlan.status}`}><span><small>COO RECOVERY PLAN</small><strong>{selectedBranch.recoveryPlan.status === "recovered" ? "Recovered" : selectedBranch.recoveryPlan.status === "escalated" ? "CEO decision required" : `Review day ${selectedBranch.recoveryPlan.reviewDay}`}</strong></span><p>{selectedBranch.recoveryPlan.status === "active" ? `Break-even deadline: day ${selectedBranch.recoveryPlan.deadlineDay}. Baseline ${money.format(selectedBranch.recoveryPlan.baselineProfit)}/mo.` : selectedBranch.lastManagerAction}</p></div>}
           <div className="v89-cost-breakdown">
             <div><small>MONTHLY COST DRIVERS</small><span>Staffing <b>{money.format(diagnosis.metrics.staffing)}</b></span><span>Rent <b>{money.format(diagnosis.metrics.rent)}</b></span><span>Local activity <b>{money.format(diagnosis.metrics.localActivity)}</b></span></div>
             <div><small>WHY THIS RESULT</small>{diagnosis.reasons.map((reason) => <span key={reason}>{reason}</span>)}</div>
@@ -187,31 +214,28 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
 
     {tab === "map" && district && districtAssessment && <section className="v89-map-layout">
       <article className="panel v89-street-map">
-        <div className="panel-heading"><div><p className="eyebrow">CITY EXPANSION MAP</p><h3>Markets, streets and local demand</h3><p>The city layer gives context; the strategic layer shows ownership, projects, competition and unlock status.</p></div></div>
+        <div className="panel-heading v813-map-heading"><div><p className="eyebrow">NATIONAL EXPANSION MAP</p><h3>24 city markets across {regions.length} regions</h3><p>Large cities support several locations. Smaller markets saturate after one branch.</p></div><select value={selectedRegion} onChange={(event) => setSelectedRegion(event.target.value)}><option value="all">All regions</option>{regions.map((region) => <option key={region} value={region}>{region}</option>)}</select></div>
         <svg viewBox="0 0 100 100" role="img" aria-label="Regional street map">
           <rect width="100" height="100" className="v89-map-ground" />
-          <path className="v89-water" d="M87 -5 C79 17 93 32 84 52 C77 71 88 85 80 105 H110 V-5 Z" />
-          <path className="v89-park" d="M43 8 L58 8 L60 19 L47 22 Z" />
-          <path className="v89-park" d="M12 68 L24 64 L29 77 L18 84 Z" />
           {[12,22,32,42,52,62,72,82].map((y) => <path key={`h-${y}`} className="v89-street minor" d={`M3 ${y} C25 ${y - 4} 54 ${y + 4} 96 ${y - 2}`} />)}
           {[14,28,44,60,76].map((x) => <path key={`v-${x}`} className="v89-street minor" d={`M${x} 3 C${x + 8} 28 ${x - 5} 68 ${x + 7} 98`} />)}
           <path className="v89-street arterial" d="M1 58 C25 50 44 59 61 48 C75 39 88 47 99 37" />
           <path className="v89-street arterial" d="M16 2 C25 24 42 40 56 59 C69 76 79 84 94 99" />
-          {game.districts.map((item) => {
+          {visibleDistricts.map((item) => {
             const assessment = getExpansionAssessmentV88(game, item.id);
-            const owned = game.branchOffices.find((branch) => branch.districtId === item.id);
+            const owned = game.branchOffices.filter((branch) => branch.districtId === item.id);
             const project = game.projects.find((entry) => entry.districtId === item.id && entry.status !== "completed");
-            return <g key={item.id} className={`v89-district ${selectedDistrictId === item.id ? "selected" : ""} ${assessment.status}`} onClick={() => chooseDistrict(item)}><path d={districtShapes[item.id]} /><text x={item.mapX} y={item.mapY - 7} textAnchor="middle">{item.name.replace(" District", "").replace(" Quarter", "")}</text><g transform={`translate(${item.mapX} ${item.mapY})`}><circle r="3.6" /><text textAnchor="middle" y=".8">{owned ? `L${owned.level}` : project ? `${project.remainingDays}d` : assessment.status === "locked" ? "LOCK" : potential(item)}</text></g></g>;
+            return <g key={item.id} transform={`translate(${item.mapX} ${item.mapY})`} className={`v89-district v813-market-pin ${selectedDistrictId === item.id ? "selected" : ""} ${assessment.status}`} onClick={() => chooseDistrict(item)}><circle r={selectedDistrictId === item.id ? 4.8 : 3.7} /><text className="v813-pin-label" textAnchor="middle" y="-6">{selectedRegion !== "all" || selectedDistrictId === item.id ? item.city : ""}</text><text className="v813-pin-value" textAnchor="middle" y=".9">{project ? `${project.remainingDays}d` : assessment.status === "locked" ? "L" : owned.length ? `${owned.length}/${item.maxBranches}` : potential(item)}</text></g>;
           })}
-          {game.competitors.slice(0, 4).map((competitor, index) => <g key={competitor.id} className="v89-competitor" transform={`translate(${22 + index * 18} ${24 + (index % 2) * 38})`}><circle r="2.1" /><text x="3" y="1">{competitor.name}</text></g>)}
         </svg>
-        <div className="v89-map-legend"><span><i className="owned" />Your branch</span><span><i className="available" />Available</span><span><i className="funding" />Funding constrained</span><span><i className="locked" />Stage locked</span><span><i className="competitor" />Competitor</span></div>
+        <div className="v89-map-legend"><span><i className="owned" />At branch limit</span><span><i className="available" />Space available</span><span><i className="funding" />Funding constrained</span><span><i className="locked" />Stage locked</span></div>
+        <div className="v813-city-grid">{visibleDistricts.map((item) => { const assessment = getExpansionAssessmentV88(game, item.id); const locations = game.branchOffices.filter((branch) => branch.districtId === item.id).length; return <button key={item.id} className={`${selectedDistrictId === item.id ? "selected" : ""} ${assessment.status}`} onClick={() => chooseDistrict(item)}><span><strong>{item.city}</strong><small>{item.region}</small></span><span><b>{locations}/{item.maxBranches}</b><small>{potential(item)} opportunity</small></span></button>; })}</div>
       </article>
       <aside className="panel v89-market-inspector">
-        <div className="v89-market-status"><span className={districtAssessment.status}>{districtAssessment.status}</span><small>{district.requiredStage} stage</small></div>
+        <div className="v89-market-status"><span className={districtAssessment.status}>{districtAssessment.status}</span><small>{district.region} · {district.requiredStage} stage</small></div>
         <p className="eyebrow">SELECTED MARKET</p><h2>{district.name}</h2><p>{district.description}</p>
-        <div className="v89-market-metrics"><Metric label="Opportunity" value={`${potential(district)}/100`} /><Metric label="Population" value={district.population.toLocaleString(game.locale)} /><Metric label="Competition" value={`${district.competition}/100`} /><Metric label="Income index" value={`${district.incomeIndex}`} /><Metric label="Digital affinity" value={`${district.digitalAffinity}/100`} /><Metric label="Opening cost" value={money.format(district.openingCost)} /></div>
-        {!game.branchOffices.some((branch) => branch.districtId === district.id) && !game.projects.some((project) => project.districtId === district.id && project.status !== "completed") && <>
+        <div className="v89-market-metrics"><Metric label="Opportunity" value={`${potential(district)}/100`} /><Metric label="Population" value={district.population.toLocaleString(game.locale)} /><Metric label="Competition" value={`${district.competition}/100`} /><Metric label="Branch slots" value={`${game.branchOffices.filter((branch) => branch.districtId === district.id).length}/${district.maxBranches}`} /><Metric label="Digital affinity" value={`${district.digitalAffinity}/100`} /><Metric label="Opening cost" value={money.format(district.openingCost)} /></div>
+        {game.branchOffices.filter((branch) => branch.districtId === district.id).length < district.maxBranches && !game.projects.some((project) => project.districtId === district.id && project.status !== "completed") && <>
           <div className="v89-profile-grid">{profiles.map((item) => <button key={item} className={profile === item ? "selected" : ""} onClick={() => setProfile(item)}><strong>{profileNames[item]}</strong></button>)}</div>
           {districtAssessment.reasons.length > 0 && <div className="v89-rule-reasons">{districtAssessment.reasons.map((reason) => <span key={reason}>{reason}</span>)}</div>}
           <div className="v89-funding-grid"><button className="secondary" disabled={!districtAssessment.cashAllowed} onClick={() => action((state) => startBranchProjectV88(state, district.id, profile, "cash"))}><strong>Pay in cash</strong><small>{money.format(district.openingCost)}</small></button><button className="primary" disabled={!districtAssessment.financeAllowed} onClick={() => action((state) => startBranchProjectV88(state, district.id, profile, "financed"))}><strong>Finance expansion</strong><small>{money.format(districtAssessment.upfront)} upfront</small></button></div>

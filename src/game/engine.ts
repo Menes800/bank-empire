@@ -2,10 +2,11 @@ import { initialCompetitors } from "./catalog";
 import { createObjectives } from "./objectives";
 import type { CampaignInput, EmployeeProfile, GameState } from "./types";
 import { addEvent, createEvent, historyPoint } from "./utils";
-import { initialV4Fields } from "./v4/catalog";
+import { generateDistrictsForMarket, initialV4Fields } from "./v4/catalog";
 import { employeeDepartment } from "./v8/gameplay";
 import { defaultExecutiveMandates } from "./v88/gameplay";
 import { generateCandidateMarket, generatedCompetitors } from "./v88/generation";
+import { normaliseMarketShares } from "./simulation";
 
 export { PRODUCT_CATALOG, SERVICE_REASSIGNMENT } from "./catalog";
 export * from "./simulation";
@@ -133,6 +134,7 @@ export function emptyGame(): GameState {
     gdpGrowth: 1.7,
     economicCycle: "growth",
     competitors: initialCompetitors(),
+    competitorHistory: [],
     objectives: [],
     pendingDecision: null,
     loanApplications: [],
@@ -149,11 +151,20 @@ export function emptyGame(): GameState {
     competitorMoves: [],
     managementControl: { treasury: "major", lending: "major", marketing: "major", operations: "automatic" },
     executiveMandates: defaultExecutiveMandates(),
+    cooNetworkPolicy: {
+      enabled: true,
+      priority: "profitability",
+      investmentLimit: 1_500_000,
+      reviewDays: 90,
+      breakEvenDays: 180,
+      autoHireManagers: true,
+    },
     managementLog: [],
     devModeUsed: false,
     bankruptcyProtection: false,
   };
-  return { ...base, objectives: createObjectives(base, 1), history: [historyPoint(base)] };
+  const normalised = normaliseMarketShares(base);
+  return { ...normalised, objectives: createObjectives(normalised, 1), history: [historyPoint(normalised)] };
 }
 
 export function createCampaign(input: CampaignInput): GameState {
@@ -166,6 +177,8 @@ export function createCampaign(input: CampaignInput): GameState {
     cash: difficultyCash,
     version: 88,
     competitors: generatedCompetitors(input.worldSeed, input.homeMarket, initialCompetitors()),
+    competitorHistory: [],
+    districts: generateDistrictsForMarket(input.homeMarket),
     candidatePool: generateCandidateMarket(input.worldSeed, input.homeMarket, input.nameStyle, 1, 18).map(enrichEmployee),
     branchOffices: emptyGame().branchOffices.map((branch, index) => index === 0 ? { ...branch, name: input.firstBranchName } : branch),
   };
@@ -204,6 +217,7 @@ export function createCampaign(input: CampaignInput): GameState {
     state = { ...state, employees: 10, satisfaction: 75, employeeRoster: [...state.employeeRoster, operationsEmployee] };
   }
 
+  state = normaliseMarketShares(state);
   state = { ...state, objectives: createObjectives(state, 1), history: [historyPoint(state)] };
   return addEvent(state, createEvent(1, "positive", "Your bank is open", `${input.bankName} has received its banking licence and welcomed its first customers at ${input.firstBranchName}.`));
 }

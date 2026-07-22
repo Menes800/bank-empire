@@ -111,13 +111,14 @@ export function ObjectiveCard({
 }
 
 export function CompetitorRow({ competitor, rank }: { competitor: Competitor; rank: number }) {
+  const strategyLabel = { digital: "Digital bank", premium: "Private bank", volume: "Low-price bank", conservative: "Conservative bank", business: "Business bank", community: "Community bank", challenger: "Challenger bank" }[competitor.strategy];
   return (
     <div className="competitor-row">
       <span className="rank-number">{rank}</span>
       <div className="competitor-logo">{competitor.name.slice(0, 1)}</div>
       <div>
         <strong>{competitor.name}</strong>
-        <small>{competitor.strategy} · {competitor.customers.toLocaleString("en-GB")} customers</small>
+        <small>{strategyLabel} · {competitor.specialty ?? `${competitor.customers.toLocaleString("en-GB")} customers`}</small>
       </div>
       <span><small>Market share</small><b>{competitor.marketShare.toFixed(2)}%</b></span>
       <span><small>Reputation</small><b>{competitor.reputation.toFixed(0)}</b></span>

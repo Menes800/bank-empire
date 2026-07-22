@@ -1,7 +1,7 @@
 import { approveLoanRefined, counterLoanRefined, declineLoanRefined, startBranchUpgrade, startStrategicProject } from "../v4/gameplay";
 import { getCreditRecommendation } from "../v6/gameplay";
 import { getBranchEconomicsV7, getBranchUpgradeEconomicsV7 } from "../v7/gameplay";
-import type { BankProject, BranchOffice, CashFlowSnapshot, ExecutivePermission, ExecutiveRole, GameState, LoanApplication, ManagementLogEntry, ProjectKind } from "../types";
+import type { BankProject, BranchOffice, BranchPortfolioStatus, CashFlowSnapshot, CooNetworkPolicy, ExecutivePermission, ExecutiveRole, GameState, LoanApplication, ManagementLogEntry, ProjectKind } from "../types";
 import { clamp, normaliseCurrencyTextState, round } from "../utils";
 import { advanceDaysV889, delegateInboxTaskV88, getMandateAssessmentV88 } from "../v88/mandates";
 import { repairCampaignState } from "../v88/gameplay";
@@ -45,7 +45,7 @@ export const PROGRAMMES_V89: ProgrammeConfigV89[] = [
 ];
 
 const stageOrder: GameState["campaignStage"][] = ["startup", "regional", "national", "group", "empire"];
-const strategicPattern = /acquisition|capital raise|issue equity|executive dismissal|dismiss executive|withdraw(?:al)? of (?:the )?licen[cs]e|licen[cs]e withdrawal|management fraud|executive fraud|related-party|conflict of interest|regulatory resolution|bankruptcy|merger|sell the bank|change of control/i;
+const strategicPattern = /acquisition|capital raise|issue equity|executive dismissal|dismiss executive|withdraw(?:al)? of (?:the )?licen[cs]e|licen[cs]e withdrawal|management fraud|executive fraud|related-party|conflict of interest|regulatory resolution|bankruptcy|merger|branch closure|portfolio decision|sell the bank|change of control/i;
 
 function logAction(state: GameState, entry: Omit<ManagementLogEntry, "id" | "day">): GameState {
   const duplicate = state.managementLog.find((item) => item.role === entry.role && item.title === entry.title && item.detail === entry.detail && item.day >= state.day - 2);
@@ -189,6 +189,7 @@ export function advanceDaysV89(state: GameState, days: number): GameState {
     current = advanceDaysV889(current, 1);
     if (current.day === before) break;
     current = reconcileManagementV89(current);
+    if (current.day % 30 === 0) current = runCooNetworkReviewV89(current);
     current = continuousCashHistory(reconcileCashFlowV89(beforeState, current));
   }
   return current;
@@ -280,6 +281,226 @@ export function getBranchDiagnosisV89(state: GameState, branch: BranchOffice) {
   return { metrics, reasons: reasons.length ? reasons : ["No material structural weakness detected"], recommendation, breakEvenCustomers, customersToBreakEven };
 }
 
+export function setCooNetworkPolicyV89(state: GameState, patch: Partial<CooNetworkPolicy>): GameState {
+  return {
+    ...state,
+    cooNetworkPolicy: {
+      ...state.cooNetworkPolicy,
+      ...patch,
+      investmentLimit: clamp(patch.investmentLimit ?? state.cooNetworkPolicy.investmentLimit, 0, 25_000_000),
+      reviewDays: clamp(Math.round(patch.reviewDays ?? state.cooNetworkPolicy.reviewDays), 30, 180),
+      breakEvenDays: clamp(Math.round(patch.breakEvenDays ?? state.cooNetworkPolicy.breakEvenDays), 90, 365),
+    },
+  };
+}
+
+export function branchPortfolioStatusV89(state: GameState, branch: BranchOffice): BranchPortfolioStatus {
+  const metrics = branchMetricsV89(state, branch);
+  return portfolioStatusFromMetrics(state, branch, metrics);
+}
+
+function portfolioStatusFromMetrics(state: GameState, branch: BranchOffice, metrics: ReturnType<typeof branchMetricsV89>): BranchPortfolioStatus {
+  if (!branch.managerId || branch.managerControl === false) return "review";
+  if (metrics.profit < 0) {
+    return branch.recoveryPlan?.status === "active" && state.day <= branch.recoveryPlan.deadlineDay ? "turnaround" : "review";
+  }
+  return metrics.capacityUse >= 78 || (branch.operatingPriority ?? "balanced") === "growth" ? "growth" : "stable";
+}
+
+export function getCooPortfolioSummaryV89(state: GameState) {
+  const branches = state.branchOffices.map((branch) => {
+    const metrics = branchMetricsV89(state, branch);
+    const status = portfolioStatusFromMetrics(state, branch, metrics);
+    return { branch, metrics, status };
+  });
+  const counts: Record<BranchPortfolioStatus, number> = { growth: 0, stable: 0, turnaround: 0, review: 0 };
+  for (const item of branches) counts[item.status] += 1;
+  const nextReviewDay = branches
+    .map(({ branch }) => branch.recoveryPlan?.status === "active" ? branch.recoveryPlan.reviewDay : Number.POSITIVE_INFINITY)
+    .reduce((earliest, day) => Math.min(earliest, day), Number.POSITIVE_INFINITY);
+  return {
+    branches,
+    counts,
+    vacancies: branches.filter(({ branch }) => !branch.managerId).length,
+    totalProfit: branches.reduce((sum, item) => sum + item.metrics.profit, 0),
+    nextReviewDay: Number.isFinite(nextReviewDay) ? nextReviewDay : null,
+  };
+}
+
+function recruitBranchManagerV89(state: GameState, branch: BranchOffice, cooId: string): GameState {
+  const mandate = state.executiveMandates.COO;
+  const candidate = [...state.candidatePool]
+    .filter((person) => !person.executiveRole && person.leadership >= 45 && person.salary * 1.5 <= mandate.spendLimit)
+    .sort((a, b) => b.leadership + b.skill + b.loyalty * .2 - (a.leadership + a.skill + a.loyalty * .2))[0];
+  if (!candidate) return state;
+  const cost = round(candidate.salary * 1.5);
+  if (state.cash < cost + 500_000) return state;
+  const manager: GameState["employeeRoster"][number] = {
+    ...candidate,
+    role: "Branch manager",
+    executiveRole: null,
+    assignedBranchId: branch.id,
+    department: "Branch Operations" as const,
+    reportsTo: cooId,
+    workload: 78,
+    wellbeing: Math.max(76, candidate.wellbeing ?? candidate.energy),
+  };
+  return {
+    ...state,
+    cash: state.cash - cost,
+    employees: state.employees + 1,
+    candidatePool: state.candidatePool.filter((person) => person.id !== candidate.id),
+    employeeRoster: [...state.employeeRoster, manager],
+    branchOffices: state.branchOffices.map((office) => office.id === branch.id ? {
+      ...office,
+      managerId: manager.id,
+      managerControl: true,
+      managerMandate: "guarded" as const,
+      lastManagerAction: `${candidate.name} was recruited as branch manager within the COO salary mandate.`,
+    } : office),
+  };
+}
+
+export function runCooNetworkReviewV89(state: GameState): GameState {
+  const policy = state.cooNetworkPolicy;
+  const coo = state.employeeRoster.find((employee) => employee.executiveRole === "COO");
+  const mandate = state.executiveMandates.COO;
+  if (!policy.enabled || !coo || state.managementControl.operations === "manual") {
+    return { ...state, branchOffices: state.branchOffices.map((branch) => ({ ...branch, portfolioStatus: branchPortfolioStatusV89(state, branch) })) };
+  }
+
+  let next = state;
+  let managersHired = 0;
+  if (policy.autoHireManagers && mandate.permissions.includes("branchManagers") && mandate.permissions.includes("hiring")) {
+    for (const original of state.branchOffices.filter((branch) => branch.managerControl !== false && !branch.managerId).slice(0, 2)) {
+      const branch = next.branchOffices.find((item) => item.id === original.id);
+      if (!branch || branch.managerId) continue;
+      const beforeRoster = next.employeeRoster.length;
+      next = recruitBranchManagerV89(next, branch, coo.id);
+      if (next.employeeRoster.length > beforeRoster) managersHired += 1;
+    }
+  }
+
+  let newPlans = 0;
+  let recovered = 0;
+  const escalated: BranchOffice[] = [];
+  next = {
+    ...next,
+    branchOffices: next.branchOffices.map((branch) => {
+      const metrics = branchMetricsV89(next, branch);
+      const canOperate = branch.managerControl !== false && Boolean(branch.managerId) && mandate.permissions.includes("transfers");
+      let recoveryPlan = branch.recoveryPlan ?? null;
+      let underperformingMonths = branch.underperformingMonths ?? 0;
+      let portfolioStatus: BranchPortfolioStatus;
+      let lastManagerAction = branch.lastManagerAction;
+
+      if (metrics.profit >= 0) {
+        if (recoveryPlan && recoveryPlan.status !== "recovered") {
+          recoveryPlan = { ...recoveryPlan, status: "recovered" };
+          recovered += 1;
+          lastManagerAction = `${coo.name} closed the recovery plan after the branch returned to break-even.`;
+        }
+        underperformingMonths = 0;
+        portfolioStatus = metrics.capacityUse >= 78 ? "growth" : "stable";
+      } else if (!canOperate) {
+        underperformingMonths += 1;
+        portfolioStatus = "review";
+      } else if (recoveryPlan?.status === "escalated") {
+        underperformingMonths += 1;
+        portfolioStatus = "review";
+      } else if (!recoveryPlan || recoveryPlan.status !== "active") {
+        recoveryPlan = {
+          startDay: next.day,
+          reviewDay: next.day + policy.reviewDays,
+          deadlineDay: next.day + policy.breakEvenDays,
+          baselineProfit: metrics.profit,
+          targetProfit: 0,
+          status: "active",
+        };
+        underperformingMonths += 1;
+        portfolioStatus = "turnaround";
+        newPlans += 1;
+        lastManagerAction = `${coo.name} started a ${policy.reviewDays}-day recovery review with a ${policy.breakEvenDays}-day break-even deadline.`;
+      } else if (next.day >= recoveryPlan.deadlineDay) {
+        recoveryPlan = { ...recoveryPlan, status: "escalated" };
+        underperformingMonths += 1;
+        portfolioStatus = "review";
+        escalated.push(branch);
+        lastManagerAction = `${coo.name} escalated closure, relocation or merger because the break-even deadline was missed.`;
+      } else {
+        underperformingMonths += 1;
+        portfolioStatus = "turnaround";
+        lastManagerAction = next.day >= recoveryPlan.reviewDay
+          ? `${coo.name} completed the ${policy.reviewDays}-day review and continued the plan to its break-even deadline.`
+          : lastManagerAction;
+      }
+
+      const recoveryControls = portfolioStatus === "turnaround" ? {
+        operatingPriority: "profitability" as const,
+        localFocus: "business" as const,
+        managerMandate: "guarded" as const,
+        managerBudget: Math.min(branch.managerBudget ?? 0, 10_000),
+      } : {};
+      const policyControls = portfolioStatus !== "turnaround" && branch.managerControl !== false
+        ? policy.priority === "growth" && metrics.capacityUse < 88
+          ? { operatingPriority: "growth" as const, localFocus: "deposits" as const, managerMandate: "growth" as const, managerBudget: Math.max(branch.managerBudget ?? 0, 25_000) }
+          : policy.priority === "profitability" && metrics.profit < metrics.revenue * .12
+            ? { operatingPriority: "profitability" as const, localFocus: "business" as const, managerMandate: "guarded" as const, managerBudget: Math.min(branch.managerBudget ?? 0, 10_000) }
+            : {}
+        : {};
+      return { ...branch, ...policyControls, ...recoveryControls, portfolioStatus, recoveryPlan, underperformingMonths, cooLastReviewDay: next.day, lastManagerAction };
+    }),
+  };
+
+  const growthBranches = next.branchOffices.filter((branch) => branch.portfolioStatus === "growth" && (branch.localCustomers ?? 0) / Math.max(1, branch.capacity) > .88);
+  const turnaroundBranches = next.branchOffices.filter((branch) => branch.portfolioStatus === "turnaround" && (branch.localCustomers ?? 0) / Math.max(1, branch.capacity) < .55);
+  let transfers = 0;
+  for (const destination of growthBranches.slice(0, 2)) {
+    const source = turnaroundBranches.find((branch) => next.employeeRoster.some((employee) => employee.assignedBranchId === branch.id && employee.id !== branch.managerId));
+    const employee = source ? next.employeeRoster.find((person) => person.assignedBranchId === source.id && person.id !== source.managerId) : undefined;
+    if (!source || !employee) continue;
+    next = {
+      ...next,
+      employeeRoster: next.employeeRoster.map((person) => person.id === employee.id ? { ...person, assignedBranchId: destination.id, reportsTo: coo.id } : person),
+      branchOffices: next.branchOffices.map((branch) => branch.id === source.id || branch.id === destination.id ? { ...branch, lastManagerAction: `${coo.name} transferred ${employee.name} from ${source.name} to ${destination.name}.` } : branch),
+    };
+    transfers += 1;
+  }
+
+  const routineSources = /^(manager|profit|capacity)-/;
+  next = { ...next, ceoInbox: next.ceoInbox.map((task) => task.sourceId && routineSources.test(task.sourceId) ? { ...task, status: "delegated" } : task) };
+  if (!next.branchOffices.some((branch) => branch.recoveryPlan?.status === "escalated")) {
+    next = { ...next, ceoInbox: next.ceoInbox.map((task) => task.sourceId === "coo-portfolio-exceptions" && task.status === "open" ? { ...task, status: "resolved" } : task) };
+  }
+  if (escalated.length > 0 && !next.ceoInbox.some((task) => task.sourceId === "coo-portfolio-exceptions" && task.status === "open")) {
+    const names = escalated.slice(0, 3).map((branch) => branch.name).join(", ");
+    const task: GameState["ceoInbox"][number] = {
+      id: `coo-portfolio-exceptions-${next.day}`,
+      createdDay: next.day,
+      category: "network",
+      title: `${escalated.length} branches require a CEO portfolio decision`,
+      summary: `${names}${escalated.length > 3 ? ` and ${escalated.length - 3} more` : ""} missed the break-even deadline. The COO recommends closure, relocation or merger review.`,
+      urgency: "important",
+      page: "network",
+      status: "open",
+      ownerRole: "COO",
+      sourceId: "coo-portfolio-exceptions",
+    };
+    next = {
+      ...next,
+      ceoInbox: [task, ...next.ceoInbox].slice(0, 40),
+    };
+  }
+
+  const summary = getCooPortfolioSummaryV89(next);
+  return logAction(next, {
+    role: "COO",
+    title: "Monthly branch portfolio review",
+    detail: `${coo.name} reviewed ${summary.branches.length} branches: ${summary.counts.growth} growth, ${summary.counts.stable} stable, ${summary.counts.turnaround} in turnaround and ${summary.counts.review} requiring review. ${newPlans} recovery plans started, ${recovered} recovered, ${managersHired} managers recruited and ${transfers} employees transferred.`,
+    outcome: escalated.length > 0 ? "reported" : "completed",
+  });
+}
+
 export function getBranchUpgradePlanV89(state: GameState, branchId: string) {
   const branch = state.branchOffices.find((item) => item.id === branchId);
   if (!branch) return null;
@@ -289,8 +510,9 @@ export function getBranchUpgradePlanV89(state: GameState, branchId: string) {
   const coo = state.employeeRoster.find((employee) => employee.executiveRole === "COO");
   const mandate = state.executiveMandates.COO;
   const authority = branch.upgradeAuthority ?? "manual";
-  const authorityAllows = economics.viable && (authority === "small" ? branch.level === 1 && cost <= 1_250_000 : authority === "profitable" ? paybackMonths !== null && paybackMonths <= 24 : false);
-  const canDelegate = Boolean(coo && mandate.permissions.includes("localUpgrades") && authorityAllows && cost <= mandate.spendLimit && risk <= mandate.riskLimit && state.cash >= cost);
+  const policyPaybackLimit = state.cooNetworkPolicy.priority === "profitability" ? 18 : state.cooNetworkPolicy.priority === "growth" ? 36 : 24;
+  const authorityAllows = economics.viable && (authority === "small" ? branch.level === 1 && cost <= 1_250_000 : authority === "profitable" ? paybackMonths !== null && paybackMonths <= Math.min(24, policyPaybackLimit) : false);
+  const canDelegate = Boolean(coo && mandate.permissions.includes("localUpgrades") && authorityAllows && cost <= mandate.spendLimit && cost <= state.cooNetworkPolicy.investmentLimit && risk <= mandate.riskLimit && state.cash >= cost);
   const reasons: string[] = [];
   if (branch.level >= 3) reasons.push("Branch is already at maximum level");
   if (economics.capacityUse < 75) reasons.push(`Build demand before upgrading; capacity use is only ${economics.capacityUse.toFixed(0)}%`);
@@ -301,6 +523,7 @@ export function getBranchUpgradePlanV89(state: GameState, branchId: string) {
   if (!mandate.permissions.includes("localUpgrades")) reasons.push("Local upgrades are not in the COO mandate");
   if (!authorityAllows) reasons.push(authority === "manual" ? "Branch rules reserve upgrades for the CEO" : "The upgrade does not meet the branch authority rule");
   if (cost > mandate.spendLimit) reasons.push(`Cost exceeds the COO limit of ${mandate.spendLimit.toLocaleString(state.locale)} ${state.currency}`);
+  if (cost > state.cooNetworkPolicy.investmentLimit) reasons.push(`Cost exceeds the network investment limit of ${state.cooNetworkPolicy.investmentLimit.toLocaleString(state.locale)} ${state.currency}`);
   if (risk > mandate.riskLimit) reasons.push(`Risk ${risk.toFixed(0)} exceeds the COO limit of ${mandate.riskLimit.toFixed(0)}`);
   return { branch, cost, capacityGain, monthlyRevenueGain, monthlyCostGain, monthlyProfitGain, paybackMonths, risk, canDelegate, canStart: economics.viable && !state.projects.some((project) => project.branchId === branch.id && project.status !== "completed") && state.cash >= cost, reasons, cooName: coo?.name };
 }

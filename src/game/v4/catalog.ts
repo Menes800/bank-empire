@@ -5,6 +5,7 @@ import type {
   CustomerSegment,
   District,
   EmployeeProfile,
+  HomeMarket,
   ProductKey,
   ProductTerms,
   TutorialStep,
@@ -12,15 +13,86 @@ import type {
 
 export const STAGE_ORDER = ["startup", "regional", "national", "group", "empire"] as const;
 
-export const DISTRICTS: District[] = [
-  { id: "harbour", name: "Harbour Quarter", description: "Mixed households and small businesses near the first branch.", population: 18_000, incomeIndex: 94, competition: 38, digitalAffinity: 58, retailDemand: 78, mortgageDemand: 62, businessDemand: 64, wealthDemand: 24, openingCost: 1_900_000, monthlyRent: 56_000, requiredStage: "startup", mapX: 26, mapY: 62 },
-  { id: "garden", name: "Garden Suburbs", description: "Families, commuters and strong mortgage demand.", population: 32_000, incomeIndex: 108, competition: 42, digitalAffinity: 64, retailDemand: 72, mortgageDemand: 92, businessDemand: 34, wealthDemand: 42, openingCost: 2_400_000, monthlyRent: 72_000, requiredStage: "startup", mapX: 58, mapY: 70 },
-  { id: "central", name: "Central Business District", description: "Premium offices, corporate deposits and intense competition.", population: 25_000, incomeIndex: 132, competition: 82, digitalAffinity: 79, retailDemand: 58, mortgageDemand: 44, businessDemand: 94, wealthDemand: 78, openingCost: 4_800_000, monthlyRent: 165_000, requiredStage: "regional", mapX: 48, mapY: 39 },
-  { id: "university", name: "University District", description: "Students and young professionals with high digital expectations.", population: 27_000, incomeIndex: 82, competition: 55, digitalAffinity: 94, retailDemand: 88, mortgageDemand: 26, businessDemand: 31, wealthDemand: 12, openingCost: 2_200_000, monthlyRent: 68_000, requiredStage: "regional", mapX: 72, mapY: 31 },
-  { id: "industrial", name: "Industrial Belt", description: "SMEs, logistics firms and higher credit risk.", population: 21_000, incomeIndex: 91, competition: 33, digitalAffinity: 52, retailDemand: 42, mortgageDemand: 31, businessDemand: 96, wealthDemand: 16, openingCost: 3_100_000, monthlyRent: 84_000, requiredStage: "regional", mapX: 18, mapY: 28 },
-  { id: "ridge", name: "Ridge Estates", description: "Affluent households and wealth-management potential.", population: 14_000, incomeIndex: 168, competition: 70, digitalAffinity: 73, retailDemand: 38, mortgageDemand: 66, businessDemand: 48, wealthDemand: 98, openingCost: 5_500_000, monthlyRent: 185_000, requiredStage: "national", mapX: 82, mapY: 59 },
-  { id: "coast", name: "Coastal Region", description: "A broader regional market requiring stronger management.", population: 58_000, incomeIndex: 103, competition: 61, digitalAffinity: 67, retailDemand: 76, mortgageDemand: 71, businessDemand: 69, wealthDemand: 35, openingCost: 7_500_000, monthlyRent: 240_000, requiredStage: "national", mapX: 35, mapY: 13 },
+type MarketKind = "metro" | "suburb" | "business" | "university" | "industrial" | "wealth" | "regional" | "coastal";
+type MarketNode = { id: string; kind: MarketKind; requiredStage: District["requiredStage"]; mapX: number; mapY: number; maxBranches: number };
+
+const MARKET_NODES: MarketNode[] = [
+  { id: "harbour", kind: "metro", requiredStage: "startup", mapX: 12, mapY: 18, maxBranches: 3 },
+  { id: "garden", kind: "suburb", requiredStage: "startup", mapX: 26, mapY: 24, maxBranches: 2 },
+  { id: "central", kind: "business", requiredStage: "regional", mapX: 42, mapY: 15, maxBranches: 3 },
+  { id: "university", kind: "university", requiredStage: "regional", mapX: 58, mapY: 24, maxBranches: 2 },
+  { id: "industrial", kind: "industrial", requiredStage: "regional", mapX: 74, mapY: 16, maxBranches: 2 },
+  { id: "ridge", kind: "wealth", requiredStage: "national", mapX: 88, mapY: 25, maxBranches: 2 },
+  { id: "coast", kind: "coastal", requiredStage: "national", mapX: 16, mapY: 44, maxBranches: 2 },
+  { id: "east-hub", kind: "regional", requiredStage: "regional", mapX: 32, mapY: 48, maxBranches: 2 },
+  { id: "west-hub", kind: "regional", requiredStage: "regional", mapX: 49, mapY: 42, maxBranches: 2 },
+  { id: "south-hub", kind: "suburb", requiredStage: "national", mapX: 66, mapY: 50, maxBranches: 2 },
+  { id: "north-hub", kind: "industrial", requiredStage: "national", mapX: 84, mapY: 44, maxBranches: 1 },
+  { id: "river-city", kind: "metro", requiredStage: "national", mapX: 10, mapY: 70, maxBranches: 2 },
+  { id: "lake-city", kind: "suburb", requiredStage: "national", mapX: 25, mapY: 76, maxBranches: 1 },
+  { id: "capital-south", kind: "business", requiredStage: "national", mapX: 40, mapY: 68, maxBranches: 2 },
+  { id: "innovation-city", kind: "university", requiredStage: "group", mapX: 56, mapY: 78, maxBranches: 2 },
+  { id: "port-city", kind: "coastal", requiredStage: "group", mapX: 72, mapY: 68, maxBranches: 2 },
+  { id: "energy-city", kind: "business", requiredStage: "group", mapX: 88, mapY: 76, maxBranches: 2 },
+  { id: "mountain-city", kind: "wealth", requiredStage: "group", mapX: 18, mapY: 92, maxBranches: 1 },
+  { id: "midlands", kind: "regional", requiredStage: "group", mapX: 34, mapY: 91, maxBranches: 1 },
+  { id: "growth-belt", kind: "industrial", requiredStage: "group", mapX: 48, mapY: 90, maxBranches: 2 },
+  { id: "northern-coast", kind: "coastal", requiredStage: "empire", mapX: 62, mapY: 94, maxBranches: 1 },
+  { id: "technology-belt", kind: "university", requiredStage: "empire", mapX: 74, mapY: 88, maxBranches: 2 },
+  { id: "international-gateway", kind: "business", requiredStage: "empire", mapX: 86, mapY: 92, maxBranches: 3 },
+  { id: "remote-region", kind: "regional", requiredStage: "empire", mapX: 94, mapY: 58, maxBranches: 1 },
 ];
+
+const MARKET_NAMES: Record<HomeMarket, Array<[city: string, region: string]>> = {
+  NO: [["Oslo Sentrum", "Oslo"], ["Oslo Vest", "Oslo"], ["Oslo Øst", "Oslo"], ["Bærum", "Akershus"], ["Lillestrøm", "Akershus"], ["Drammen", "Buskerud"], ["Fredrikstad", "Østfold"], ["Moss", "Østfold"], ["Hamar", "Innlandet"], ["Lillehammer", "Innlandet"], ["Gjøvik", "Innlandet"], ["Tønsberg", "Vestfold"], ["Sandefjord", "Vestfold"], ["Skien", "Telemark"], ["Kristiansand", "Agder"], ["Stavanger", "Rogaland"], ["Sandnes", "Rogaland"], ["Haugesund", "Rogaland"], ["Bergen Sentrum", "Vestland"], ["Bergen Sør", "Vestland"], ["Ålesund", "Møre og Romsdal"], ["Molde", "Møre og Romsdal"], ["Trondheim", "Trøndelag"], ["Tromsø", "Nord-Norge"]],
+  SE: [["Stockholm City", "Stockholm"], ["Solna", "Stockholm"], ["Södermalm", "Stockholm"], ["Uppsala", "Svealand"], ["Västerås", "Svealand"], ["Örebro", "Svealand"], ["Linköping", "Östergötland"], ["Norrköping", "Östergötland"], ["Jönköping", "Småland"], ["Växjö", "Småland"], ["Kalmar", "Småland"], ["Malmö", "Skåne"], ["Lund", "Skåne"], ["Helsingborg", "Skåne"], ["Göteborg City", "Västra Götaland"], ["Borås", "Västra Götaland"], ["Halmstad", "Halland"], ["Karlstad", "Värmland"], ["Gävle", "Gävleborg"], ["Sundsvall", "Norrland"], ["Umeå", "Norrland"], ["Luleå", "Norrland"], ["Kiruna", "Norrland"], ["Visby", "Gotland"]],
+  DK: [["København City", "Hovedstaden"], ["Frederiksberg", "Hovedstaden"], ["Ørestad", "Hovedstaden"], ["Roskilde", "Sjælland"], ["Køge", "Sjælland"], ["Næstved", "Sjælland"], ["Odense", "Fyn"], ["Svendborg", "Fyn"], ["Aarhus City", "Midtjylland"], ["Silkeborg", "Midtjylland"], ["Randers", "Midtjylland"], ["Herning", "Midtjylland"], ["Vejle", "Syddanmark"], ["Kolding", "Syddanmark"], ["Esbjerg", "Syddanmark"], ["Aalborg", "Nordjylland"], ["Hjørring", "Nordjylland"], ["Horsens", "Midtjylland"], ["Fredericia", "Syddanmark"], ["Sønderborg", "Syddanmark"], ["Holstebro", "Vestjylland"], ["Skagen", "Nordjylland"], ["Billund", "Syddanmark"], ["Bornholm", "Hovedstaden"]],
+  FI: [["Helsinki Centre", "Uusimaa"], ["Espoo", "Uusimaa"], ["Vantaa", "Uusimaa"], ["Porvoo", "Uusimaa"], ["Turku", "Southwest Finland"], ["Tampere", "Pirkanmaa"], ["Lahti", "Päijät-Häme"], ["Hämeenlinna", "Kanta-Häme"], ["Pori", "Satakunta"], ["Rauma", "Satakunta"], ["Vaasa", "Ostrobothnia"], ["Seinäjoki", "Ostrobothnia"], ["Jyväskylä", "Central Finland"], ["Kuopio", "North Savo"], ["Joensuu", "North Karelia"], ["Mikkeli", "South Savo"], ["Lappeenranta", "South Karelia"], ["Kotka", "Kymenlaakso"], ["Oulu", "North Ostrobothnia"], ["Kokkola", "Central Ostrobothnia"], ["Rovaniemi", "Lapland"], ["Kajaani", "Kainuu"], ["Mariehamn", "Åland"], ["Ivalo", "Lapland"]],
+  DE: [["Berlin Mitte", "Berlin"], ["Berlin West", "Berlin"], ["Potsdam", "Brandenburg"], ["Hamburg", "North"], ["Bremen", "North"], ["Hannover", "Lower Saxony"], ["Düsseldorf", "Rhine-Ruhr"], ["Köln", "Rhine-Ruhr"], ["Dortmund", "Rhine-Ruhr"], ["Essen", "Rhine-Ruhr"], ["Frankfurt", "Hesse"], ["Wiesbaden", "Hesse"], ["Stuttgart", "Baden-Württemberg"], ["Mannheim", "Baden-Württemberg"], ["Karlsruhe", "Baden-Württemberg"], ["München", "Bavaria"], ["Nürnberg", "Bavaria"], ["Augsburg", "Bavaria"], ["Leipzig", "Saxony"], ["Dresden", "Saxony"], ["Erfurt", "Thuringia"], ["Freiburg", "Southwest"], ["Rostock", "Baltic"], ["Kiel", "Schleswig-Holstein"]],
+  GB: [["London City", "London"], ["West London", "London"], ["East London", "London"], ["Cambridge", "East of England"], ["Oxford", "South East"], ["Reading", "South East"], ["Bristol", "South West"], ["Cardiff", "Wales"], ["Birmingham", "West Midlands"], ["Coventry", "West Midlands"], ["Nottingham", "East Midlands"], ["Leicester", "East Midlands"], ["Manchester", "North West"], ["Liverpool", "North West"], ["Leeds", "Yorkshire"], ["Sheffield", "Yorkshire"], ["Newcastle", "North East"], ["York", "Yorkshire"], ["Edinburgh", "Scotland"], ["Glasgow", "Scotland"], ["Aberdeen", "Scotland"], ["Belfast", "Northern Ireland"], ["Southampton", "South Coast"], ["Brighton", "South Coast"]],
+  US: [["New York Midtown", "Northeast"], ["Brooklyn", "Northeast"], ["Boston", "Northeast"], ["Philadelphia", "Northeast"], ["Washington D.C.", "Mid-Atlantic"], ["Miami", "Southeast"], ["Atlanta", "Southeast"], ["Charlotte", "Southeast"], ["Nashville", "Southeast"], ["Chicago", "Midwest"], ["Detroit", "Midwest"], ["Minneapolis", "Midwest"], ["Dallas", "Texas"], ["Houston", "Texas"], ["Austin", "Texas"], ["Denver", "Mountain"], ["Phoenix", "Southwest"], ["Las Vegas", "Southwest"], ["Seattle", "Pacific Northwest"], ["Portland", "Pacific Northwest"], ["San Francisco", "California"], ["San Jose", "California"], ["Los Angeles", "California"], ["San Diego", "California"]],
+  CH: [["Zürich Centre", "Zürich"], ["Winterthur", "Zürich"], ["Basel", "Northwest"], ["Bern", "Mittelland"], ["Biel", "Mittelland"], ["Luzern", "Central"], ["Zug", "Central"], ["St. Gallen", "East"], ["Chur", "Graubünden"], ["Lausanne", "Vaud"], ["Geneva", "Lake Geneva"], ["Montreux", "Lake Geneva"], ["Fribourg", "West"], ["Neuchâtel", "West"], ["Sion", "Valais"], ["Lugano", "Ticino"], ["Locarno", "Ticino"], ["Thun", "Bernese Oberland"], ["Interlaken", "Bernese Oberland"], ["Aarau", "Aargau"], ["Schaffhausen", "North"], ["Solothurn", "Mittelland"], ["Davos", "Graubünden"], ["St. Moritz", "Graubünden"]],
+  JP: [["Tokyo Marunouchi", "Kanto"], ["Shinjuku", "Kanto"], ["Yokohama", "Kanto"], ["Chiba", "Kanto"], ["Saitama", "Kanto"], ["Nagoya", "Chubu"], ["Shizuoka", "Chubu"], ["Kanazawa", "Hokuriku"], ["Osaka", "Kansai"], ["Kyoto", "Kansai"], ["Kobe", "Kansai"], ["Nara", "Kansai"], ["Hiroshima", "Chugoku"], ["Okayama", "Chugoku"], ["Takamatsu", "Shikoku"], ["Matsuyama", "Shikoku"], ["Fukuoka", "Kyushu"], ["Kumamoto", "Kyushu"], ["Nagasaki", "Kyushu"], ["Kagoshima", "Kyushu"], ["Sendai", "Tohoku"], ["Niigata", "Chubu"], ["Sapporo", "Hokkaido"], ["Naha", "Okinawa"]],
+};
+
+const KIND_ECONOMICS: Record<MarketKind, Omit<District, "id" | "name" | "city" | "region" | "requiredStage" | "mapX" | "mapY" | "maxBranches">> = {
+  metro: { description: "Dense households, services and strong everyday-banking demand.", population: 72_000, incomeIndex: 112, competition: 72, digitalAffinity: 82, retailDemand: 92, mortgageDemand: 66, businessDemand: 72, wealthDemand: 48, openingCost: 4_200_000, monthlyRent: 138_000 },
+  suburb: { description: "Families, commuters and long-term mortgage relationships.", population: 44_000, incomeIndex: 108, competition: 48, digitalAffinity: 68, retailDemand: 78, mortgageDemand: 94, businessDemand: 38, wealthDemand: 42, openingCost: 2_500_000, monthlyRent: 74_000 },
+  business: { description: "Corporate deposits, advisers and intense commercial competition.", population: 35_000, incomeIndex: 136, competition: 82, digitalAffinity: 80, retailDemand: 58, mortgageDemand: 48, businessDemand: 96, wealthDemand: 76, openingCost: 4_900_000, monthlyRent: 162_000 },
+  university: { description: "Students, founders and young professionals with digital expectations.", population: 39_000, incomeIndex: 88, competition: 57, digitalAffinity: 95, retailDemand: 91, mortgageDemand: 32, businessDemand: 54, wealthDemand: 18, openingCost: 2_250_000, monthlyRent: 69_000 },
+  industrial: { description: "SMEs, logistics and manufacturing relationships with higher credit demand.", population: 31_000, incomeIndex: 94, competition: 42, digitalAffinity: 56, retailDemand: 48, mortgageDemand: 38, businessDemand: 97, wealthDemand: 22, openingCost: 3_050_000, monthlyRent: 86_000 },
+  wealth: { description: "Affluent households and strong private-banking potential.", population: 22_000, incomeIndex: 168, competition: 73, digitalAffinity: 76, retailDemand: 44, mortgageDemand: 72, businessDemand: 58, wealthDemand: 98, openingCost: 5_350_000, monthlyRent: 178_000 },
+  regional: { description: "A balanced regional centre serving households and local companies.", population: 48_000, incomeIndex: 101, competition: 51, digitalAffinity: 65, retailDemand: 76, mortgageDemand: 70, businessDemand: 68, wealthDemand: 34, openingCost: 3_350_000, monthlyRent: 96_000 },
+  coastal: { description: "Tourism, trade and seasonal local demand across a broad catchment.", population: 37_000, incomeIndex: 104, competition: 55, digitalAffinity: 63, retailDemand: 72, mortgageDemand: 65, businessDemand: 74, wealthDemand: 38, openingCost: 3_600_000, monthlyRent: 104_000 },
+};
+
+export function generateDistrictsForMarket(market: HomeMarket): District[] {
+  return MARKET_NODES.map((node, index) => {
+    const [city, region] = MARKET_NAMES[market][index];
+    const base = KIND_ECONOMICS[node.kind];
+    const scale = .88 + index % 5 * .055;
+    return {
+      ...base,
+      id: node.id,
+      name: city,
+      city,
+      region,
+      description: `${city}: ${base.description}`,
+      population: Math.round(base.population * scale / 1_000) * 1_000,
+      incomeIndex: Math.round(base.incomeIndex * (.96 + index % 3 * .025)),
+      competition: Math.min(92, Math.round(base.competition + (index % 4 - 1.5) * 3)),
+      digitalAffinity: Math.min(98, Math.round(base.digitalAffinity + (index % 3 - 1) * 2)),
+      openingCost: Math.round(base.openingCost * scale / 50_000) * 50_000,
+      monthlyRent: Math.round(base.monthlyRent * scale / 1_000) * 1_000,
+      requiredStage: node.requiredStage,
+      mapX: node.mapX,
+      mapY: node.mapY,
+      maxBranches: node.maxBranches,
+    };
+  });
+}
+
+export const DISTRICTS: District[] = generateDistrictsForMarket("NO");
 
 const employee = (id: string, name: string, role: string, skill: number, leadership: number, salary: number, trait: string): EmployeeProfile => ({
   id, name, role, executiveRole: null, salary, skill, leadership, loyalty: 70 + (skill % 17), energy: 88, trait, assignedBranchId: null,

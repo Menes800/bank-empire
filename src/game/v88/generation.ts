@@ -1,5 +1,6 @@
 import type {
   Competitor,
+  CompetitorStrategy,
   EmployeeDepartment,
   EmployeeProfile,
   ExecutiveRole,
@@ -147,9 +148,63 @@ export function generateCandidateMarket(seed: string | number, market: HomeMarke
 
 export function generatedCompetitors(seed: string | number, market: HomeMarket, competitors: Competitor[]): Competitor[] {
   const data = localNames[market];
+  const used = new Set<string>();
   return competitors.map((competitor, index) => {
-    const place = pick(data.places, `${seed}-competitor-${index}-place`);
-    const word = pick(data.bankWords, `${seed}-competitor-${index}-word`);
-    return { ...competitor, name: `${place} ${word}` };
+    const place = data.places[(index + Math.floor(seededValue(`${seed}-competitor-place`) * data.places.length)) % data.places.length];
+    const word = data.bankWords[(index * 2 + Math.floor(seededValue(`${seed}-competitor-word`) * data.bankWords.length)) % data.bankWords.length];
+    let name = `${place} ${word}`;
+    if (used.has(name)) name = `${place} ${["Direct", "Commercial", "Partners", "Community"][index % 4]}`;
+    if (used.has(name)) name = `${name} ${index + 1}`;
+    used.add(name);
+    return { ...competitor, name, homeCity: place, enteredDay: competitor.enteredDay ?? 1 };
   });
+}
+
+const entrantStrategies: CompetitorStrategy[] = ["challenger", "community", "business", "digital", "volume", "conservative", "premium"];
+const entrantSpecialties: Record<CompetitorStrategy, string> = {
+  challenger: "Fast product launches and aggressive growth",
+  community: "Local service and relationship banking",
+  business: "SME and commercial banking",
+  digital: "Mobile-first everyday banking",
+  volume: "Low-price, high-volume retail banking",
+  conservative: "Savings and conservative mortgages",
+  premium: "Private banking and wealth management",
+};
+
+export function generateCompetitorEntrant(seed: string | number, market: HomeMarket, day: number, index: number, existingNames: string[] = []): Competitor {
+  const data = localNames[market];
+  const entrantSeed = `${seed}-${day}-${index}-entrant`;
+  const strategy = entrantStrategies[Math.floor(seededValue(`${entrantSeed}-strategy`) * entrantStrategies.length) % entrantStrategies.length];
+  const place = pick(data.places, `${entrantSeed}-place`);
+  const word = pick(data.bankWords, `${entrantSeed}-word`);
+  const alternatives = [
+    `${place} ${word}`,
+    `${place} ${strategy === "business" ? "Commercial" : strategy === "community" ? "Community" : strategy === "digital" ? "Direct" : "Bank"}`,
+    `${pick(["Horizon", "Civic", "Unity", "Northstar", "Pioneer"], `${entrantSeed}-brand`)} ${word}`,
+  ];
+  const name = alternatives.find((candidate) => !existingNames.includes(candidate)) ?? `${alternatives[2]} ${day}`;
+  const customers = 1_600 + Math.round(seededValue(`${entrantSeed}-customers`) * 3_900);
+  const branches = strategy === "digital" ? 0 : strategy === "community" ? 4 : strategy === "business" ? 3 : Math.floor(seededValue(`${entrantSeed}-branches`) * 4);
+  const deposits = customers * (9_000 + seededValue(`${entrantSeed}-deposits`) * 13_000);
+  const loans = customers * (6_000 + seededValue(`${entrantSeed}-loans`) * 10_000);
+  const reputation = 52 + Math.round(seededValue(`${entrantSeed}-reputation`) * 25);
+  const digitalLevel = strategy === "digital" || strategy === "challenger" ? 78 + Math.round(seededValue(`${entrantSeed}-digital`) * 18) : 42 + Math.round(seededValue(`${entrantSeed}-digital`) * 38);
+  return {
+    id: `entrant-${hashSeed(entrantSeed).toString(36)}`,
+    name,
+    strategy,
+    customers,
+    deposits,
+    loans,
+    reputation,
+    marketShare: 0,
+    depositRate: 2.35 + seededValue(`${entrantSeed}-deposit-rate`) * 1.1,
+    loanRate: 5.65 + seededValue(`${entrantSeed}-loan-rate`) * 1.7,
+    branches,
+    digitalLevel,
+    acquisitionPrice: Math.round((deposits * .12 + loans * .08 + customers * 1_900) / 100_000) * 100_000,
+    homeCity: place,
+    specialty: entrantSpecialties[strategy],
+    enteredDay: day,
+  };
 }

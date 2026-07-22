@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { acquireCompetitor, chooseDecision, raiseWholesaleFunding, repayWholesaleFunding } from "../src/game/actions";
 import { DECISIONS } from "../src/game/catalog";
-import { emptyGame } from "../src/game/engine";
-import { advanceDay } from "../src/game/simulation";
+import { emptyGame, getExpansionAssessmentV88, repairCampaignState } from "../src/game/engine";
+import { advanceDay, normaliseMarketShares } from "../src/game/simulation";
 import { executiveRoleFit, shortlistExecutiveCandidates } from "../src/game/v5/gameplay";
 import { advanceDaysV6 } from "../src/game/v6/gameplay";
 import { advanceDaysV7, getBranchEconomicsV7, getBranchUpgradeEconomicsV7 } from "../src/game/v7/gameplay";
 import { getRiskContributions } from "../src/game/v810/insights";
-import { advanceDaysV89, branchMetricsV89, getBranchDiagnosisV89, getBranchUpgradePlanV89, getMandateAssessmentV89, reconcileManagementV89 } from "../src/game/v89/gameplay";
+import { advanceDaysV89, branchMetricsV89, getBranchDiagnosisV89, getBranchUpgradePlanV89, getCooPortfolioSummaryV89, getMandateAssessmentV89, reconcileManagementV89, runCooNetworkReviewV89 } from "../src/game/v89/gameplay";
 import { hasCheckpoint, loadGame, restoreCheckpoint, saveGame } from "../src/game/store";
 import type { GameState } from "../src/game/types";
 import { addEvent, annualPayrollCost, calculateFundingProfile, calculateRatios, createEvent, dailyPayrollCost, monthlyPayrollCost } from "../src/game/utils";
+import { MarketPage } from "../src/ui/pages/MarketPage";
+import { NetworkPageV89 } from "../src/ui/v89/NetworkPage";
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -50,6 +54,9 @@ describe("acquisitions", () => {
 
     expect(acquired.branchOffices).toHaveLength(initial.branchOffices.length + target.branches);
     expect(acquired.branches).toBe(acquired.branchOffices.length);
+    for (const district of acquired.districts) {
+      expect(acquired.branchOffices.filter((branch) => branch.districtId === district.id).length).toBeLessThanOrEqual(district.maxBranches);
+    }
 
     const advanced = advanceDaysV89(acquired, 1);
     expect(advanced.branchOffices).toHaveLength(acquired.branchOffices.length);
@@ -422,5 +429,168 @@ describe("v0.8.12 executive recruitment", () => {
     expect(fits).toEqual([...fits].sort((a, b) => b - a));
     const allRanked = shortlistExecutiveCandidates(state.candidatePool, "CFO", state.candidatePool.length);
     expect(shortlist.map((candidate) => candidate.id)).toEqual(allRanked.slice(0, 3).map((candidate) => candidate.id));
+  });
+});
+
+describe("v0.8.13 living competition", () => {
+  it("keeps seven active rivals and makes displayed market share total 100%", () => {
+    const initial = normaliseMarketShares(activeGame({ cash: 200_000_000, reputation: 90 }));
+    const target = initial.competitors[0];
+    const acquired = acquireCompetitor(initial, target.id);
+    const replenished = repairCampaignState(acquired);
+    const totalShare = replenished.marketShare + replenished.competitors.reduce((sum, competitor) => sum + competitor.marketShare, 0);
+
+    expect(replenished.competitors).toHaveLength(7);
+    expect(new Set(replenished.competitors.map((competitor) => competitor.name)).size).toBe(7);
+    expect(replenished.competitors.some((competitor) => competitor.id === target.id)).toBe(false);
+    expect(replenished.competitorHistory[0]).toMatchObject({ id: target.id, reason: "acquired" });
+    expect(replenished.competitorMoves.some((move) => move.type === "entry")).toBe(true);
+    expect(totalShare).toBeCloseTo(100, 8);
+
+    const secondTarget = replenished.competitors.find((competitor) => competitor.id !== target.id)!;
+    const replenishedAgain = repairCampaignState(acquireCompetitor(replenished, secondTarget.id));
+    expect(new Set(replenishedAgain.competitors.map((competitor) => competitor.id)).size).toBe(7);
+    expect(new Set(replenishedAgain.competitors.map((competitor) => competitor.name)).size).toBe(7);
+  });
+
+  it("keeps competitor intelligence and exit history bounded", () => {
+    const state = repairCampaignState(activeGame({
+      competitorMoves: Array.from({ length: 60 }, (_, index) => ({ id: `move-${index}`, day: index, competitorId: "old", competitorName: "Old Bank", type: "pricing" as const, title: "Old move", description: "Old history", impact: 1 })),
+      competitorHistory: Array.from({ length: 40 }, (_, index) => ({ id: `exit-${index}`, name: `Old Bank ${index}`, day: index, reason: "withdrawn" as const })),
+    }));
+
+    expect(state.competitorMoves.length).toBeLessThanOrEqual(18);
+    expect(state.competitorHistory.length).toBeLessThanOrEqual(24);
+  });
+});
+
+describe("v0.8.13 national branch network", () => {
+  it("migrates a seven-market save to 24 city markets without losing its branch", () => {
+    const legacy = activeGame();
+    const branchIds = legacy.branchOffices.map((branch) => branch.id);
+    const repaired = repairCampaignState({ ...legacy, districts: legacy.districts.slice(0, 7) });
+
+    expect(repaired.districts).toHaveLength(24);
+    expect(repaired.districts.every((district) => Boolean(district.city && district.region && district.maxBranches))).toBe(true);
+    expect(repaired.branchOffices.map((branch) => branch.id)).toEqual(branchIds);
+  });
+
+  it("allows several branches in large cities until the market slot limit is reached", () => {
+    const base = activeGame({ cash: 100_000_000, boardConfidence: 90, liquidityRatio: 60 });
+    const district = base.districts.find((item) => item.maxBranches >= 3)!;
+    const first = { ...base.branchOffices[0], districtId: district.id };
+    const second = { ...first, id: "second-city-branch", name: `${district.city} Branch 2` };
+    const open = getExpansionAssessmentV88({ ...base, branchOffices: [first] }, district.id);
+    const full = getExpansionAssessmentV88({ ...base, branchOffices: [first, second, { ...second, id: "third-city-branch" }] }, district.id);
+
+    expect(open.allowed).toBe(true);
+    expect(open.existingBranches).toBe(1);
+    expect(full.allowed).toBe(false);
+    expect(full.reasons.join(" ")).toMatch(/limit/i);
+  });
+});
+
+describe("v0.8.13 COO portfolio management", () => {
+  function cooScenario() {
+    const base = repairCampaignState(activeGame({ cash: 30_000_000, day: 30, objectives: [] }));
+    const cooCandidate = base.candidatePool[0];
+    const coo = { ...cooCandidate, id: "coo-network-test", executiveRole: "COO" as const, role: "Chief operating officer", assignedBranchId: null };
+    const lossBranch = { ...base.branchOffices[0], managerControl: true, lastMonthRevenue: 90_000, lastMonthCost: 210_000, lastMonthProfit: -120_000, recoveryPlan: null, portfolioStatus: "review" as const };
+    const vacantBranch = { ...lossBranch, id: "branch-vacant-test", districtId: base.districts[1].id, name: `${base.districts[1].city} Branch`, managerId: null, lastMonthRevenue: 125_000, lastMonthCost: 105_000, lastMonthProfit: 20_000 };
+    return {
+      ...base,
+      branchOffices: [lossBranch, vacantBranch],
+      branches: 2,
+      employeeRoster: [...base.employeeRoster, coo],
+      candidatePool: base.candidatePool.filter((candidate) => candidate.id !== cooCandidate.id),
+      managementControl: { ...base.managementControl, operations: "major" as const },
+      executiveMandates: { ...base.executiveMandates, COO: { ...base.executiveMandates.COO, permissions: [...new Set([...base.executiveMandates.COO.permissions, "hiring" as const, "branchManagers" as const, "transfers" as const])], spendLimit: 1_500_000 } },
+    };
+  }
+
+  it("starts a recovery plan and recruits a vacant manager inside the COO mandate", () => {
+    const state = cooScenario();
+    const reviewed = runCooNetworkReviewV89(state);
+    const lossBranch = reviewed.branchOffices.find((branch) => branch.id === state.branchOffices[0].id)!;
+    const filledBranch = reviewed.branchOffices.find((branch) => branch.id === "branch-vacant-test")!;
+    const summary = getCooPortfolioSummaryV89(reviewed);
+
+    expect(lossBranch.recoveryPlan).toMatchObject({ status: "active", reviewDay: state.day + 90, deadlineDay: state.day + 180 });
+    expect(lossBranch.portfolioStatus).toBe("turnaround");
+    expect(filledBranch.managerId).not.toBeNull();
+    expect(reviewed.cash).toBeLessThan(state.cash);
+    expect(summary.counts.turnaround).toBeGreaterThanOrEqual(1);
+    expect(reviewed.managementLog[0].title).toBe("Monthly branch portfolio review");
+  });
+
+  it("escalates only a missed break-even deadline as a CEO portfolio decision", () => {
+    const started = runCooNetworkReviewV89(cooScenario());
+    const plan = started.branchOffices[0].recoveryPlan!;
+    const due = {
+      ...started,
+      day: plan.deadlineDay,
+      branchOffices: started.branchOffices.map((branch, index) => index === 0 ? { ...branch, lastMonthProfit: -75_000 } : branch),
+    };
+    const escalated = runCooNetworkReviewV89(due);
+    const task = escalated.ceoInbox.find((item) => item.sourceId === "coo-portfolio-exceptions");
+
+    expect(escalated.branchOffices[0].portfolioStatus).toBe("review");
+    expect(escalated.branchOffices[0].recoveryPlan?.status).toBe("escalated");
+    expect(task?.status).toBe("open");
+    expect(task?.title).toMatch(/CEO portfolio decision/);
+    expect(getMandateAssessmentV89(escalated, task!).requiresCEO).toBe(true);
+
+    const reviewedAgain = runCooNetworkReviewV89({ ...escalated, day: escalated.day + 30 });
+    expect(reviewedAgain.branchOffices[0].portfolioStatus).toBe("review");
+    expect(reviewedAgain.branchOffices[0].recoveryPlan?.status).toBe("escalated");
+    expect(reviewedAgain.ceoInbox.filter((item) => item.sourceId === "coo-portfolio-exceptions" && item.status === "open")).toHaveLength(1);
+  });
+});
+
+describe("v0.8.13 long-network optimisation", () => {
+  it("keeps a 32-branch campaign responsive and history bounded for a full year", () => {
+    const base = repairCampaignState(activeGame({ cash: 500_000_000, deposits: 800_000_000, loans: 520_000_000, customers: 55_000, employees: 220, difficulty: "relaxed", objectives: [], bankruptcyProtection: true }));
+    const cooCandidate = base.candidatePool[0];
+    const coo = { ...cooCandidate, id: "coo-load-test", executiveRole: "COO" as const, role: "Chief operating officer", assignedBranchId: null };
+    const branches = Array.from({ length: 32 }, (_, index) => {
+      const district = base.districts[index % base.districts.length];
+      return { ...base.branchOffices[0], id: `load-branch-${index}`, districtId: district.id, name: `${district.city} ${index + 1}`, managerId: base.branchOffices[0].managerId, localCustomers: 420 + index % 180, localDeposits: 12_000_000, localLoans: 9_000_000, lastMonthRevenue: 180_000, lastMonthCost: 155_000, lastMonthProfit: 25_000 };
+    });
+    let state = repairCampaignState({ ...base, branchOffices: branches, branches: branches.length, employeeRoster: [...base.employeeRoster, coo], candidatePool: base.candidatePool.slice(1) });
+    const started = Date.now();
+
+    for (let index = 0; index < 365; index += 1) {
+      if (state.pendingDecision) state = chooseDecision(state, state.pendingDecision.choices[0].id);
+      state = advanceDaysV89(state, 1);
+    }
+
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(state.day).toBe(366);
+    expect(state.branchOffices).toHaveLength(32);
+    expect(state.history.length).toBeLessThanOrEqual(120);
+    expect(state.cashFlowHistory.length).toBeLessThanOrEqual(120);
+    expect(state.competitorMoves.length).toBeLessThanOrEqual(18);
+    expect(state.managementLog.length).toBeLessThanOrEqual(120);
+    expect([state.cash, state.marketShare, ...state.competitors.map((competitor) => competitor.marketShare)].every(Number.isFinite)).toBe(true);
+  });
+});
+
+describe("v0.8.13 interface integrity", () => {
+  it("renders the COO portfolio controls and compact branch tools", () => {
+    const state = repairCampaignState(activeGame());
+    const markup = renderToStaticMarkup(createElement(NetworkPageV89, { game: state, action: () => undefined }));
+
+    expect(markup).toContain("COO NETWORK MANDATE");
+    expect(markup).toContain("Search branch or manager");
+    expect(markup).toContain("Attention first");
+  });
+
+  it("renders a complete competitor ranking without infinite pricing values", () => {
+    const state = repairCampaignState(activeGame());
+    const markup = renderToStaticMarkup(createElement(MarketPage, { game: state }));
+
+    expect(markup).toContain("7 active rivals");
+    expect(markup).toContain("100.0% represented");
+    expect(markup).not.toMatch(/-?Infinity/);
   });
 });
