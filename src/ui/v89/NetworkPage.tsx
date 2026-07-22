@@ -159,6 +159,7 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
             <Metric label="Deposits" value={money.format(diagnosis.metrics.deposits)} />
             <Metric label="Loans" value={money.format(diagnosis.metrics.loans)} />
           </div>
+          <div className={`v812-break-even ${diagnosis.metrics.profit < 0 ? "warning" : "good"}`}><span><small>BREAK-EVEN</small><strong>{diagnosis.breakEvenCustomers.toLocaleString(game.locale)} customers</strong></span><p>{diagnosis.customersToBreakEven > 0 ? `${diagnosis.customersToBreakEven.toLocaleString(game.locale)} more customers are needed at the current revenue and cost mix.` : "This branch is operating above break-even."}</p></div>
           <div className="v89-cost-breakdown">
             <div><small>MONTHLY COST DRIVERS</small><span>Staffing <b>{money.format(diagnosis.metrics.staffing)}</b></span><span>Rent <b>{money.format(diagnosis.metrics.rent)}</b></span><span>Local activity <b>{money.format(diagnosis.metrics.localActivity)}</b></span></div>
             <div><small>WHY THIS RESULT</small>{diagnosis.reasons.map((reason) => <span key={reason}>{reason}</span>)}</div>
@@ -176,10 +177,10 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
         </article>
 
         {upgrade && <article className="panel v89-upgrade-card">
-          <div className="panel-heading"><div><p className="eyebrow">BRANCH UPGRADE</p><h3>Level {selectedBranch.level} → {Math.min(3, selectedBranch.level + 1)}</h3><p>Authority, economics and delivery risk are evaluated together.</p></div><span className={upgrade.canDelegate ? "status good" : "status warn"}>{upgrade.canDelegate ? "COO authorised" : "CEO authority"}</span></div>
-          <div className="v89-upgrade-metrics"><Metric label="Cost" value={money.format(upgrade.cost)} /><Metric label="Capacity gain" value={`+${upgrade.capacityGain}`} /><Metric label="Revenue gain" value={money.format(upgrade.monthlyRevenueGain)} /><Metric label="Cost gain" value={money.format(upgrade.monthlyCostGain)} /><Metric label="Profit gain" value={money.format(upgrade.monthlyProfitGain)} /><Metric label="Payback" value={`${upgrade.paybackMonths.toFixed(0)} months`} /></div>
+          <div className="panel-heading"><div><p className="eyebrow">BRANCH UPGRADE</p><h3>Level {selectedBranch.level} → {Math.min(3, selectedBranch.level + 1)}</h3><p>Authority, economics and delivery risk are evaluated together.</p></div><span className={upgrade.canDelegate ? "status good" : "status warn"}>{!upgrade.canStart ? "Not viable" : upgrade.canDelegate ? "COO authorised" : "CEO authority"}</span></div>
+          <div className="v89-upgrade-metrics"><Metric label="Cost" value={money.format(upgrade.cost)} /><Metric label="Capacity gain" value={`+${upgrade.capacityGain}`} /><Metric label="Revenue gain" value={money.format(upgrade.monthlyRevenueGain)} /><Metric label="Cost gain" value={money.format(upgrade.monthlyCostGain)} /><Metric label="Profit gain" value={money.format(upgrade.monthlyProfitGain)} /><Metric label="Payback" value={upgrade.paybackMonths === null ? "Not viable" : `${upgrade.paybackMonths.toFixed(0)} months`} /></div>
           {!upgrade.canDelegate && upgrade.reasons.length > 0 && <div className="v89-rule-reasons">{upgrade.reasons.map((reason) => <span key={reason}>{reason}</span>)}</div>}
-          <button className="primary wide" disabled={!upgrade.canStart} onClick={() => action((state) => approveBranchUpgradeV89(state, selectedBranch.id, !upgrade.canDelegate))}>{upgrade.canDelegate ? `Delegate approval to ${upgrade.cooName}` : "Approve upgrade as CEO"}</button>
+          <button className="primary wide" disabled={!upgrade.canStart} onClick={() => action((state) => approveBranchUpgradeV89(state, selectedBranch.id, !upgrade.canDelegate))}>{!upgrade.canStart ? "Build demand before upgrading" : upgrade.canDelegate ? `Delegate approval to ${upgrade.cooName}` : "Approve upgrade as CEO"}</button>
         </article>}
       </div>}
     </section>}

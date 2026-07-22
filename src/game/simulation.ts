@@ -1,4 +1,4 @@
-import { DECISIONS } from "./catalog";
+import { DECISIONS, SERVICE_REASSIGNMENT } from "./catalog";
 import { evaluateObjectives, unlockAchievements } from "./objectives";
 import type { Competitor, GameState, LoanApplication } from "./types";
 import {
@@ -170,8 +170,10 @@ export function advanceDay(state: GameState): GameState {
     0.35,
     1,
   );
+  const serviceInterventionActive = Boolean(state.serviceIntervention && nextDay <= state.serviceIntervention.endDay);
+  const serviceCapacity = state.employees * (72 + state.digitalLevel * 0.35) + state.branches * 55;
   const staffingPressure = clamp(
-    state.customers / Math.max(1, state.employees * 72),
+    state.customers / Math.max(1, serviceCapacity * (serviceInterventionActive ? SERVICE_REASSIGNMENT.serviceCapacityMultiplier : 1)),
     0.55,
     2,
   );
@@ -198,7 +200,7 @@ export function advanceDay(state: GameState): GameState {
     depositRateAppeal *
     (1.12 - competitorPressure * 0.18) *
     randomBetween(0.82, 1.2, random);
-  const customersGained = Math.max(0, round(grossCustomerDemand));
+  const customersGained = Math.max(0, round(grossCustomerDemand * (serviceInterventionActive ? SERVICE_REASSIGNMENT.customerGrowthMultiplier : 1)));
   const serviceChurn = Math.max(0, staffingPressure - 1) * 0.0018;
   const pricingChurn =
     Math.max(0, economy.baseRate * 0.55 - state.depositRate) * 0.00032;
@@ -346,8 +348,12 @@ export function advanceDay(state: GameState): GameState {
     state.loanLossReserve + Math.max(0, profit) * 0.04 - creditLosses * 0.35,
   );
 
-  const serviceChange =
-    staffingPressure > 1.1 ? -0.42 * staffingPressure : 0.12;
+  const normalServiceChange = staffingPressure > 1.1
+    ? -0.12 - (staffingPressure - 1.1) * 0.16
+    : state.satisfaction < 65 ? 0.16 : 0.1;
+  const serviceChange = serviceInterventionActive
+    ? Math.max(SERVICE_REASSIGNMENT.minimumDailyServiceChange, normalServiceChange)
+    : normalServiceChange;
   const pricingChange =
     state.loanRate > economy.baseRate + 5
       ? -0.17
@@ -436,6 +442,7 @@ export function advanceDay(state: GameState): GameState {
     fraudLosses,
     reputation,
     satisfaction,
+    serviceIntervention: serviceInterventionActive && nextDay < (state.serviceIntervention?.endDay ?? 0) ? state.serviceIntervention : null,
     brandStrength,
     boardConfidence,
     customers,
@@ -449,6 +456,10 @@ export function advanceDay(state: GameState): GameState {
     competitors: competitorsWithShare,
     ...nextRatios,
   };
+
+  if (state.serviceIntervention && nextDay >= state.serviceIntervention.endDay) {
+    next = addEvent(next, createEvent(nextDay, "positive", "Service team reassignment completed", "The 30-day intervention is complete. Customer service capacity has returned to its normal operating level."));
+  }
 
   if (nextDay % 5 === 0 && next.loanApplications.length < 5) {
     next = {

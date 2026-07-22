@@ -1,5 +1,5 @@
 import type { ExecutiveRole, GameState } from "../types";
-import { clamp } from "../utils";
+import { calculateFundingProfile, calculateRiskContributionPoints, clamp } from "../utils";
 
 export type ReputationDriver = {
   key: "service" | "brand" | "compliance" | "technology" | "financial";
@@ -12,6 +12,7 @@ export type ReputationDriver = {
 
 export function getReputationDrivers(state: GameState): ReputationDriver[] {
   const technology = (state.digitalLevel + state.cyberSecurity) / 2;
+  const serviceDaysRemaining = state.serviceIntervention ? Math.max(0, state.serviceIntervention.endDay - state.day) : 0;
   const financialLevel = clamp((state.capitalRatio * 2 + state.liquidityRatio) / 3, 0, 100);
   const financialEffect = state.capitalRatio < 9 || state.liquidityRatio < 12
     ? -0.065
@@ -26,7 +27,7 @@ export function getReputationDrivers(state: GameState): ReputationDriver[] {
       owner: "COO",
       level: state.satisfaction,
       dailyEffect: clamp((state.satisfaction - 70) * 0.003, -0.15, 0.08),
-      explanation: state.satisfaction < 58 ? "Poor service is actively damaging public trust." : state.satisfaction >= 80 ? "Strong service is steadily improving trust." : "Service is close to neutral.",
+      explanation: serviceDaysRemaining > 0 ? `Team reassignment is active for ${serviceDaysRemaining} more days and is protecting service capacity.` : state.satisfaction < 58 ? "Poor service is actively damaging public trust." : state.satisfaction >= 80 ? "Strong service is steadily improving trust." : "Service is close to neutral.",
     },
     {
       key: "brand",
@@ -94,13 +95,19 @@ export type RiskContribution = {
 };
 
 export function getRiskContributions(state: GameState): RiskContribution[] {
-  const loanToDeposit = state.loans / Math.max(1, state.deposits);
+  const funding = calculateFundingProfile(state.cash, state.loans, state.deposits, state.wholesaleFunding);
+  const points = calculateRiskContributionPoints(state.cash, state.loans, state.deposits, state.wholesaleFunding, state.compliance, state.nplRatio, state.capitalRatio);
+  const fundingExplanation = funding.fundingGap > 0
+    ? `${(funding.fundingGap / Math.max(1, state.loans) * 100).toFixed(0)}% of the loan book lacks stable funding.`
+    : state.deposits < 100_000
+      ? "Equity covers the loan book, but there is almost no customer-deposit funding."
+      : `${(funding.depositShare * 100).toFixed(0)}% of the loan book is matched by customer deposits; equity and wholesale funding cover the balance.`;
   return [
-    { key: "base", title: "Operating baseline", points: 12, explanation: "The minimum structural risk of running a bank." },
-    { key: "funding", title: "Funding mismatch", points: loanToDeposit * 24, explanation: state.deposits < 100_000 ? "The loan book has almost no customer-deposit funding." : `Loans equal ${(loanToDeposit * 100).toFixed(0)}% of deposits.` },
-    { key: "credit", title: "Credit quality", points: state.nplRatio * 4.2, explanation: `NPL ratio is ${state.nplRatio.toFixed(2)}%.` },
-    { key: "compliance", title: "Control weakness", points: Math.max(0, 75 - state.compliance) * 0.5, explanation: state.compliance >= 75 ? "Compliance is not adding risk." : `Compliance is ${state.compliance.toFixed(0)}, below the 75 control benchmark.` },
-    { key: "capital", title: "Capital shortfall", points: Math.max(0, 11 - state.capitalRatio) * 2.4, explanation: state.capitalRatio >= 11 ? "Capital is not adding risk." : `Capital ratio is ${state.capitalRatio.toFixed(1)}%, below the 11% risk benchmark.` },
+    { key: "base", title: "Operating baseline", points: points.base, explanation: "The minimum structural risk of running a bank." },
+    { key: "funding", title: "Funding structure", points: points.funding, explanation: fundingExplanation },
+    { key: "credit", title: "Credit quality", points: points.credit, explanation: `NPL ratio is ${state.nplRatio.toFixed(2)}%.` },
+    { key: "compliance", title: "Control weakness", points: points.compliance, explanation: state.compliance >= 75 ? "Compliance is not adding risk." : `Compliance is ${state.compliance.toFixed(0)}, below the 75 control benchmark.` },
+    { key: "capital", title: "Capital shortfall", points: points.capital, explanation: state.capitalRatio >= 11 ? "Capital is not adding risk." : `Capital ratio is ${state.capitalRatio.toFixed(1)}%, below the 11% risk benchmark.` },
   ];
 }
 

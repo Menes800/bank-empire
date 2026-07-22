@@ -1,5 +1,5 @@
 import { startBranchUpgrade } from "../v4/gameplay";
-import { resolveInboxDecision, takeCollectionAction, type CollectionAction } from "../v7/gameplay";
+import { getBranchUpgradeEconomicsV7, resolveInboxDecision, takeCollectionAction, type CollectionAction } from "../v7/gameplay";
 import { advanceDaysV8, getWorkforceDepartments } from "../v8/gameplay";
 import type { ExecutiveMandate, ExecutivePermission, ExecutiveRole, GameState, ManagementLogEntry, MandatePreset } from "../types";
 import { addEvent, clamp, createEvent, round } from "../utils";
@@ -161,9 +161,9 @@ function branchUpgradeAuthorityReason(state: GameState, task: InboxTask, cost: n
   if (authority === "manual") return "Branch upgrades are reserved for CEO approval";
   if (authority === "small" && (branch.level !== 1 || cost > 1_250_000)) return "The upgrade exceeds the branch's small-investment authority";
   if (authority === "profitable") {
-    const capacityUse = (branch.localCustomers ?? 0) / Math.max(1, branch.capacity) * 100;
-    const expectedGain = Math.max(28_000, (branch.lastMonthProfit ?? 0) * .28 + Math.max(0, capacityUse - 78) * 4_200);
-    const paybackMonths = cost / Math.max(1, expectedGain);
+    const economics = getBranchUpgradeEconomicsV7(state, branch);
+    if (!economics.viable || economics.paybackMonths === null) return "The upgrade is not forecast to improve monthly profit";
+    const paybackMonths = economics.paybackMonths;
     if (paybackMonths > 24) return `Expected payback of ${paybackMonths.toFixed(0)} months exceeds branch authority`;
   }
   return null;

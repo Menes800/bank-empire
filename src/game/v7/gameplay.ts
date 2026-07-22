@@ -94,13 +94,13 @@ export function getBranchEconomicsV7(state: GameState, branch: BranchOffice) {
   const requestedMarketing = branch.managerBudget ?? 0;
   const marketingCap = priority === "profitability" ? 10_000 : priority === "balanced" ? 25_000 : priority === "deposits" || priority === "business" ? 35_000 : 60_000;
   const marketing = Math.min(requestedMarketing, marketingCap);
-  const operations = 7_000 + branch.level * 3_500 + employees.length * 800;
+  const operations = 6_000 + branch.level * 2_500 + employees.length * 600;
   const rent = round(branch.monthlyRent);
   const cost = round(rent + payroll + marketing + operations);
   const customers = branch.localCustomers ?? Math.min(branch.capacity, 220 + branch.level * 85);
   const deposits = branch.localDeposits ?? 0;
   const loans = branch.localLoans ?? 0;
-  const relationshipIncome = branch.profile === "wealth" ? 390 : branch.profile === "business" ? 315 : branch.profile === "mortgage" ? 245 : 220;
+  const relationshipIncome = branch.profile === "wealth" ? 560 : branch.profile === "business" ? 455 : branch.profile === "mortgage" ? 385 : 310;
   const productBreadth = 1 + Math.max(0, state.products.length - 1) * .065;
   const serviceFactor = .72 + branch.satisfaction / 220;
   const feeIncome = customers * relationshipIncome * productBreadth * serviceFactor;
@@ -109,6 +109,23 @@ export function getBranchEconomicsV7(state: GameState, branch: BranchOffice) {
   const revenue = round(feeIncome + depositMargin + lendingMargin);
   const profit = round(revenue - cost);
   return { employees, annualPayroll, payroll, rent, marketing, operations, cost, revenue, profit, customers, deposits, loans };
+}
+
+export function getBranchUpgradeEconomicsV7(state: GameState, branch: BranchOffice) {
+  const current = getBranchEconomicsV7(state, branch);
+  const cost = branch.level === 1 ? 1_150_000 : branch.level === 2 ? 2_100_000 : 0;
+  const capacityGain = branch.level < 3 ? round(branch.capacity * 0.45) : 0;
+  const capacityUse = current.customers / Math.max(1, branch.capacity) * 100;
+  const demandUnlock = clamp((capacityUse - 72) / 28, 0, 1);
+  const expectedNewCustomers = round(capacityGain * demandUnlock * 0.9);
+  const revenuePerCustomer = current.revenue / Math.max(1, current.customers);
+  const monthlyRevenueGain = branch.level < 3 ? round(expectedNewCustomers * revenuePerCustomer + current.revenue * 0.025) : 0;
+  const operationsEfficiency = state.background === "Operations" ? 0.9 : 1;
+  const monthlyCostGain = branch.level < 3 ? round(3 * 52_000 / 12 * operationsEfficiency + branch.monthlyRent * 0.06 + 5_000) : 0;
+  const monthlyProfitGain = monthlyRevenueGain - monthlyCostGain;
+  const paybackMonths = monthlyProfitGain > 0 ? cost / monthlyProfitGain : null;
+  const viable = branch.level < 3 && capacityUse >= 75 && monthlyProfitGain > 0;
+  return { cost, capacityGain, capacityUse, expectedNewCustomers, monthlyRevenueGain, monthlyCostGain, monthlyProfitGain, paybackMonths, viable };
 }
 
 function runBranchAccounting(state: GameState): GameState {

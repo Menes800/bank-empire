@@ -64,6 +64,7 @@ export type BoardObjective = { id: string; title: string; description: string; m
 export type DecisionEffect = Partial<Pick<GameState, "cash" | "deposits" | "loans" | "reputation" | "satisfaction" | "customers" | "employees" | "compliance" | "digitalLevel" | "cyberSecurity" | "boardConfidence" | "brandStrength" | "fraudLosses">>;
 export type DecisionChoice = { id: string; label: string; description: string; effect: DecisionEffect };
 export type DecisionEvent = { id: string; title: string; description: string; category: "customer" | "regulatory" | "technology" | "people" | "market"; choices: DecisionChoice[] };
+export type ServiceIntervention = { kind: "team-reassignment"; startDay: number; endDay: number };
 
 export type LoanApplication = { id: string; customerName: string; segment: "Mortgage" | "SME" | "Commercial property"; amount: number; rate: number; riskGrade: "A" | "B" | "C" | "D"; defaultChance: number; collateral: number };
 
@@ -303,6 +304,7 @@ export type GameState = {
   creditLosses: number;
   reputation: number;
   satisfaction: number;
+  serviceIntervention: ServiceIntervention | null;
   brandStrength: number;
   boardConfidence: number;
   customers: number;

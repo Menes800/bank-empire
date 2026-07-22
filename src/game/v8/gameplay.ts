@@ -1,9 +1,8 @@
 import { startBranchUpgrade } from "../v4/gameplay";
-import { advanceDaysV7 } from "../v7/gameplay";
+import { advanceDaysV7, getBranchUpgradeEconomicsV7 } from "../v7/gameplay";
 import type {
   BranchFocus,
   BranchMandate,
-  BranchOffice,
   BranchPriority,
   EmployeeDepartment,
   EmployeeProfile,
@@ -13,7 +12,7 @@ import type {
   ManagementControlMode,
   UpgradeAuthority,
 } from "../types";
-import { addEvent, clamp, createEvent, round } from "../utils";
+import { addEvent, clamp, createEvent } from "../utils";
 
 const departmentOrder: EmployeeDepartment[] = ["Executive", "Branch Operations", "Credit & Collections", "Finance & Treasury", "Customer Growth", "Technology"];
 
@@ -153,14 +152,6 @@ function assignAutomaticManagers(state: GameState): GameState {
   return { ...state, branchOffices: branches, employeeRoster: roster };
 }
 
-function upgradeEconomics(branch: BranchOffice) {
-  const cost = branch.level === 1 ? 1_150_000 : 2_100_000;
-  const currentProfit = branch.lastMonthProfit ?? 0;
-  const capacityUse = (branch.localCustomers ?? 0) / Math.max(1, branch.capacity) * 100;
-  const expectedGain = Math.max(28_000, currentProfit * .28 + Math.max(0, capacityUse - 78) * 4_200);
-  return { cost, capacityUse, expectedGain, paybackMonths: cost / Math.max(1, expectedGain) };
-}
-
 function pushUniqueTask(state: GameState, task: GameState["ceoInbox"][number]) {
   if (task.sourceId && state.ceoInbox.some((item) => item.sourceId === task.sourceId && item.status === "open")) return state;
   return { ...state, ceoInbox: [task, ...state.ceoInbox].slice(0, 40) };
@@ -175,8 +166,9 @@ function runAutomaticBranchUpgrades(state: GameState): GameState {
     const branch = next.branchOffices.find((item) => item.id === original.id);
     if (!branch || !branch.managerControl || !branch.managerId || branch.level >= 3) continue;
     if (next.projects.some((project) => project.branchId === branch.id && project.status !== "completed")) continue;
-    const economics = upgradeEconomics(branch);
-    const recommended = economics.capacityUse >= 91 || (economics.capacityUse >= 84 && (branch.lastMonthProfit ?? 0) > 35_000);
+    const economics = getBranchUpgradeEconomicsV7(next, branch);
+    const paybackMonths = economics.paybackMonths ?? Number.POSITIVE_INFINITY;
+    const recommended = economics.viable && (economics.capacityUse >= 91 || (economics.capacityUse >= 84 && (branch.lastMonthProfit ?? 0) > 35_000));
     if (!recommended) {
       next = { ...next, branchOffices: next.branchOffices.map((item) => item.id === branch.id ? { ...item, pendingUpgradeRecommendation: false } : item) };
       continue;
@@ -184,11 +176,11 @@ function runAutomaticBranchUpgrades(state: GameState): GameState {
 
     const authority = branch.upgradeAuthority ?? "manual";
     const canAfford = next.cash >= economics.cost + 500_000;
-    const mayAutoApprove = authority === "small" ? branch.level === 1 && economics.cost <= 1_250_000 : authority === "profitable" ? economics.paybackMonths <= 24 : false;
+    const mayAutoApprove = authority === "small" ? branch.level === 1 && economics.cost <= 1_250_000 : authority === "profitable" ? paybackMonths <= 24 : false;
 
     if (mayAutoApprove && canAfford && state.managementControl.operations === "automatic") {
       next = startBranchUpgrade(next, branch.id);
-      next = { ...next, branchOffices: next.branchOffices.map((item) => item.id === branch.id ? { ...item, pendingUpgradeRecommendation: false, lastManagerAction: `${coo.name} and the branch manager approved a level ${branch.level + 1} expansion with ${economics.paybackMonths.toFixed(0)} month payback.` } : item) };
+      next = { ...next, branchOffices: next.branchOffices.map((item) => item.id === branch.id ? { ...item, pendingUpgradeRecommendation: false, lastManagerAction: `${coo.name} and the branch manager approved a level ${branch.level + 1} expansion with ${paybackMonths.toFixed(0)} month payback.` } : item) };
       next = addEvent(next, createEvent(state.day, "positive", `${branch.name} upgrade approved`, `${coo.name} approved the investment under the automatic profitable-upgrade mandate.`));
     } else {
       next = { ...next, branchOffices: next.branchOffices.map((item) => item.id === branch.id ? { ...item, pendingUpgradeRecommendation: true } : item) };
@@ -197,7 +189,7 @@ function runAutomaticBranchUpgrades(state: GameState): GameState {
         createdDay: state.day,
         category: "network",
         title: `${branch.name} recommends expansion`,
-        summary: `${economics.capacityUse.toFixed(0)}% capacity · ${economics.paybackMonths.toFixed(0)} month payback · $${round(economics.expectedGain / 1000)}k expected monthly improvement.`,
+        summary: `${economics.capacityUse.toFixed(0)}% capacity · ${paybackMonths.toFixed(0)} month payback · ${state.currency} ${Math.round(economics.monthlyProfitGain / 1000)}k expected monthly improvement.`,
         urgency: economics.capacityUse >= 97 ? "critical" : "important",
         page: "network",
         status: "open",

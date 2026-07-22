@@ -1,4 +1,4 @@
-import { defaultExecutiveMandates, emptyGame, repairCampaignState } from "./engine";
+import { defaultExecutiveMandates, emptyGame, getBranchEconomicsV7, repairCampaignState } from "./engine";
 import type { EmployeeDepartment, EmployeeProfile, GameState } from "./types";
 import { addEvent, calculateRatios, clamp, createEvent, normaliseCurrencyTextState, round } from "./utils";
 
@@ -94,6 +94,18 @@ function repairDepositBase(state: GameState): GameState {
   );
 }
 
+function refreshDerivedEconomics(state: GameState): GameState {
+  const ratios = calculateRatios(state.cash, state.loans, state.deposits, state.wholesaleFunding, state.compliance, state.nplRatio, state.reputation, state.satisfaction);
+  const current = { ...state, ...ratios };
+  return {
+    ...current,
+    branchOffices: current.branchOffices.map((branch) => {
+      const economics = getBranchEconomicsV7(current, branch);
+      return { ...branch, lastMonthRevenue: economics.revenue, lastMonthCost: economics.cost, lastMonthProfit: economics.profit };
+    }),
+  };
+}
+
 export function loadGame(): GameState {
   let saved: string | null = null;
   try {
@@ -125,6 +137,7 @@ export function loadGame(): GameState {
       achievements: parsed.achievements ?? [],
       loanApplications: parsed.loanApplications ?? [],
       pendingDecision: parsed.pendingDecision ?? null,
+      serviceIntervention: parsed.serviceIntervention && parsed.serviceIntervention.endDay > (parsed.day ?? 1) ? parsed.serviceIntervention : null,
       gameOverReason: parsed.gameOverReason ?? null,
       districts: parsed.districts ?? base.districts,
       branchOffices: (parsed.branchOffices ?? base.branchOffices).map((branch) => ({
@@ -178,7 +191,7 @@ export function loadGame(): GameState {
       devModeUsed: parsed.devModeUsed ?? false,
       bankruptcyProtection: parsed.bankruptcyProtection ?? false,
     };
-    const repaired = normaliseCurrencyTextState(repairCampaignState(repairDepositBase(migrated)));
+    const repaired = normaliseCurrencyTextState(refreshDerivedEconomics(repairCampaignState(repairDepositBase(migrated))));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(repaired));
     return repaired;
   } catch {
@@ -206,7 +219,7 @@ export function restoreCheckpoint(): GameState | null {
     if (!saved) return null;
     const state = JSON.parse(saved) as GameState;
     const base = emptyGame();
-    const restored = repairCampaignState({
+    const restored = refreshDerivedEconomics(repairCampaignState({
       ...base,
       ...state,
       version: 88,
@@ -222,7 +235,7 @@ export function restoreCheckpoint(): GameState | null {
       gameOverReason: null,
       liquidityBreachDays: 0,
       capitalBreachDays: 0,
-    });
+    }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
     return restored;
   } catch {

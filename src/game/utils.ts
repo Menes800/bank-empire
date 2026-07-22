@@ -123,9 +123,9 @@ export function calculateRatios(
   const riskWeightedAssets = Math.max(1, loans * (0.62 + nplRatio / 100));
   const capitalRatio = clamp((equity / riskWeightedAssets) * 100, 2, 45);
   const liquidityRatio = clamp((cash / Math.max(1, deposits)) * 100, 0, 100);
-  const loanToDeposit = loans / Math.max(1, deposits);
+  const contributions = calculateRiskContributionPoints(cash, loans, deposits, wholesaleFunding, compliance, nplRatio, capitalRatio);
   const riskScore = clamp(
-    12 + loanToDeposit * 24 + nplRatio * 4.2 + Math.max(0, 75 - compliance) * 0.5 + Math.max(0, 11 - capitalRatio) * 2.4,
+    contributions.base + contributions.funding + contributions.credit + contributions.compliance + contributions.capital,
     4,
     99,
   );
@@ -135,6 +135,41 @@ export function calculateRatios(
     100,
   );
   return { capitalRatio, liquidityRatio, riskScore, bankRunRisk };
+}
+
+export function calculateFundingProfile(cash: number, loans: number, deposits: number, wholesaleFunding: number) {
+  const loanBook = Math.max(0, loans);
+  const customerDeposits = Math.max(0, deposits);
+  const wholesale = Math.max(0, wholesaleFunding);
+  const equity = Math.max(0, cash + loanBook - customerDeposits - wholesale);
+  const stableFunding = customerDeposits + wholesale + equity;
+  const fundingGap = Math.max(0, loanBook - stableFunding);
+  const depositShare = loanBook > 0 ? clamp(customerDeposits / loanBook, 0, 2) : 1;
+  const wholesaleShare = stableFunding > 0 ? clamp(wholesale / stableFunding, 0, 1) : 0;
+  const gapShare = loanBook > 0 ? fundingGap / loanBook : 0;
+  const gapPoints = clamp(gapShare * 55, 0, 55);
+  const lowDepositPoints = loanBook >= 100_000 ? clamp((0.4 - depositShare) / 0.4 * 16, 0, 16) : 0;
+  const wholesalePoints = clamp((wholesaleShare - 0.35) * 30, 0, 12);
+  const riskPoints = clamp(gapPoints + lowDepositPoints + wholesalePoints, 0, 70);
+  return { equity, stableFunding, fundingGap, depositShare, wholesaleShare, riskPoints };
+}
+
+export function calculateRiskContributionPoints(
+  cash: number,
+  loans: number,
+  deposits: number,
+  wholesaleFunding: number,
+  compliance: number,
+  nplRatio: number,
+  capitalRatio: number,
+) {
+  return {
+    base: 12,
+    funding: calculateFundingProfile(cash, loans, deposits, wholesaleFunding).riskPoints,
+    credit: clamp(nplRatio * 4.2, 0, 35),
+    compliance: clamp(Math.max(0, 75 - compliance) * 0.5, 0, 20),
+    capital: clamp(Math.max(0, 11 - capitalRatio) * 2.4, 0, 30),
+  };
 }
 
 export function historyPoint(state: GameState): HistoryPoint {

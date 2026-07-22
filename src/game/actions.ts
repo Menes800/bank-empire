@@ -1,6 +1,6 @@
-import { PRODUCT_CATALOG } from "./catalog";
+import { PRODUCT_CATALOG, SERVICE_REASSIGNMENT } from "./catalog";
 import type { BranchOffice, Competitor, GameState, LendingPolicy, ProductKey } from "./types";
-import { addEvent, clamp, createEvent, round, seededValue } from "./utils";
+import { addEvent, calculateRatios, clamp, createEvent, round, seededValue } from "./utils";
 
 function acquiredBranchOffices(state: GameState, competitor: Competitor): BranchOffice[] {
   if (competitor.branches <= 0 || state.districts.length === 0) return [];
@@ -119,6 +119,9 @@ export function chooseDecision(state: GameState, choiceId: string): GameState {
       100,
     ),
     fraudLosses: Math.max(0, state.fraudLosses + (effect.fraudLosses ?? 0)),
+    serviceIntervention: choice.id === "reassign-teams"
+      ? { kind: "team-reassignment", startDay: state.day, endDay: state.day + SERVICE_REASSIGNMENT.durationDays }
+      : state.serviceIntervention,
   };
   next = addEvent(
     next,
@@ -265,14 +268,17 @@ export function launchProduct(state: GameState, key: ProductKey): GameState {
 export function investInCompliance(state: GameState): GameState {
   const cost = 320_000;
   if (state.cash < cost || state.compliance >= 100) return state;
+  const cash = state.cash - cost;
+  const compliance = clamp(state.compliance + 10, 1, 100);
+  const reputation = clamp(state.reputation + 0.8, 1, 100);
   return addEvent(
     {
       ...state,
-      cash: state.cash - cost,
-      compliance: clamp(state.compliance + 10, 1, 100),
-      riskScore: clamp(state.riskScore - 5, 1, 100),
+      cash,
+      compliance,
       boardConfidence: clamp(state.boardConfidence + 2, 1, 100),
-      reputation: clamp(state.reputation + 0.8, 1, 100),
+      reputation,
+      ...calculateRatios(cash, state.loans, state.deposits, state.wholesaleFunding, compliance, state.nplRatio, reputation, state.satisfaction),
     },
     createEvent(
       state.day,
@@ -302,36 +308,45 @@ export function buildLoanReserve(state: GameState): GameState {
   );
 }
 
-export function raiseWholesaleFunding(state: GameState): GameState {
-  const amount = 5_000_000;
+function normaliseFundingAmount(requestedAmount: number) {
+  if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) return 0;
+  return clamp(round(requestedAmount / 1_000_000) * 1_000_000, 1_000_000, 100_000_000);
+}
+
+export function raiseWholesaleFunding(state: GameState, requestedAmount = 5_000_000): GameState {
+  const amount = normaliseFundingAmount(requestedAmount);
+  if (amount <= 0) return state;
+  const rate = clamp(state.baseRate + 1.15 + state.riskScore / 100 + Math.max(0, amount - 25_000_000) / 500_000_000, 2, 12);
+  const cash = state.cash + amount;
+  const wholesaleFunding = state.wholesaleFunding + amount;
   return addEvent(
     {
       ...state,
-      cash: state.cash + amount,
-      wholesaleFunding: state.wholesaleFunding + amount,
-      wholesaleFundingRate: clamp(
-        state.baseRate + 1.15 + state.riskScore / 100,
-        2,
-        12,
-      ),
+      cash,
+      wholesaleFunding,
+      wholesaleFundingRate: rate,
+      ...calculateRatios(cash, state.loans, state.deposits, wholesaleFunding, state.compliance, state.nplRatio, state.reputation, state.satisfaction),
     },
     createEvent(
       state.day,
       "neutral",
       "Wholesale funding raised",
-      `The bank borrowed NOK 5 million at ${clamp(state.baseRate + 1.15 + state.riskScore / 100, 2, 12).toFixed(2)}%.`,
+      `The bank borrowed ${state.currency} ${amount.toLocaleString(state.locale)} at ${rate.toFixed(2)}%.`,
     ),
   );
 }
 
-export function repayWholesaleFunding(state: GameState): GameState {
-  const amount = Math.min(5_000_000, state.wholesaleFunding);
-  if (amount <= 0 || state.cash < amount + 1_000_000) return state;
+export function repayWholesaleFunding(state: GameState, requestedAmount = 5_000_000): GameState {
+  const amount = Math.min(normaliseFundingAmount(requestedAmount), state.wholesaleFunding, Math.max(0, state.cash - 1_000_000));
+  if (amount <= 0) return state;
+  const cash = state.cash - amount;
+  const wholesaleFunding = state.wholesaleFunding - amount;
   return addEvent(
     {
       ...state,
-      cash: state.cash - amount,
-      wholesaleFunding: state.wholesaleFunding - amount,
+      cash,
+      wholesaleFunding,
+      ...calculateRatios(cash, state.loans, state.deposits, wholesaleFunding, state.compliance, state.nplRatio, state.reputation, state.satisfaction),
     },
     createEvent(
       state.day,
@@ -501,13 +516,16 @@ export function acquireCompetitor(
 export function raiseEquityCapital(state: GameState): GameState {
   const amount = 5_000_000;
   if (state.boardConfidence < 25) return state;
+  const cash = state.cash + amount;
+  const reputation = clamp(state.reputation - 0.6, 1, 100);
   return addEvent(
     {
       ...state,
-      cash: state.cash + amount,
+      cash,
+      ...calculateRatios(cash, state.loans, state.deposits, state.wholesaleFunding, state.compliance, state.nplRatio, reputation, state.satisfaction),
       sharePrice: Math.max(3, state.sharePrice * 0.88),
       boardConfidence: clamp(state.boardConfidence - 3, 1, 100),
-      reputation: clamp(state.reputation - 0.6, 1, 100),
+      reputation,
     },
     createEvent(
       state.day,

@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { acquireCompetitor, chooseDecision } from "../src/game/actions";
+import { acquireCompetitor, chooseDecision, raiseWholesaleFunding, repayWholesaleFunding } from "../src/game/actions";
+import { DECISIONS } from "../src/game/catalog";
 import { emptyGame } from "../src/game/engine";
-import { advanceDaysV89, getMandateAssessmentV89, reconcileManagementV89 } from "../src/game/v89/gameplay";
+import { advanceDay } from "../src/game/simulation";
+import { executiveRoleFit, shortlistExecutiveCandidates } from "../src/game/v5/gameplay";
 import { advanceDaysV6 } from "../src/game/v6/gameplay";
-import { advanceDaysV7 } from "../src/game/v7/gameplay";
+import { advanceDaysV7, getBranchEconomicsV7, getBranchUpgradeEconomicsV7 } from "../src/game/v7/gameplay";
+import { getRiskContributions } from "../src/game/v810/insights";
+import { advanceDaysV89, branchMetricsV89, getBranchDiagnosisV89, getBranchUpgradePlanV89, getMandateAssessmentV89, reconcileManagementV89 } from "../src/game/v89/gameplay";
 import { hasCheckpoint, loadGame, restoreCheckpoint, saveGame } from "../src/game/store";
 import type { GameState } from "../src/game/types";
-import { addEvent, annualPayrollCost, createEvent, dailyPayrollCost, monthlyPayrollCost } from "../src/game/utils";
+import { addEvent, annualPayrollCost, calculateFundingProfile, calculateRatios, createEvent, dailyPayrollCost, monthlyPayrollCost } from "../src/game/utils";
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -150,6 +154,21 @@ describe("save safety", () => {
     expect(repaired.deposits).toBeGreaterThan(0);
     expect(equityAfter).toBeCloseTo(equityBefore, 5);
   });
+
+  it("refreshes stale risk and branch reporting when an older save is loaded", () => {
+    const base = activeGame({ riskScore: 99 });
+    const branch = { ...base.branchOffices[0], localCustomers: 233, localDeposits: 5_300_000, localLoans: 2_700_000, lastMonthRevenue: 1, lastMonthCost: 1, lastMonthProfit: 0 };
+    const legacy = { ...base, branchOffices: [branch] };
+    localStorage.setItem("bank-empire-save-v4", JSON.stringify(legacy));
+
+    const loaded = loadGame();
+    const expected = getBranchEconomicsV7(loaded, loaded.branchOffices[0]);
+
+    expect(loaded.riskScore).toBeLessThan(99);
+    expect(loaded.branchOffices[0].lastMonthRevenue).toBe(expected.revenue);
+    expect(loaded.branchOffices[0].lastMonthCost).toBe(expected.cost);
+    expect(loaded.branchOffices[0].lastMonthProfit).toBe(expected.profit);
+  });
 });
 
 describe("economic integrity", () => {
@@ -269,6 +288,21 @@ describe("economic integrity", () => {
     expect(state.day).toBe(121);
     expect(state.gameOverReason).toBeNull();
   });
+
+  it("keeps a full relaxed campaign year playable after the economy repair", () => {
+    let state = activeGame({ worldSeed: 812_365, difficulty: "relaxed", objectives: [] });
+
+    for (let index = 0; index < 365 && !state.gameOverReason; index += 1) {
+      if (state.pendingDecision) state = chooseDecision(state, state.pendingDecision.choices[0].id);
+      state = advanceDaysV89(state, 1);
+      for (const value of [state.cash, state.deposits, state.loans, state.riskScore, state.satisfaction]) {
+        expect(Number.isFinite(value)).toBe(true);
+      }
+    }
+
+    expect(state.day).toBe(366);
+    expect(state.gameOverReason).toBeNull();
+  });
 });
 
 describe("event integrity", () => {
@@ -288,5 +322,105 @@ describe("event integrity", () => {
     const next = addEvent(state, createEvent(state.day, "neutral", "Funding", "Raised $6m after a NOK 100,000 review."));
 
     expect(next.events[0].body).toBe("Raised SEK 6m after a SEK 100,000 review.");
+  });
+});
+
+describe("v0.8.12 funding repair", () => {
+  it("keeps zero-deposit funding risk finite and recognises positive equity", () => {
+    const state = activeGame({ cash: 205_000_000, loans: 191_000_000, deposits: 0, wholesaleFunding: 0, compliance: 80, nplRatio: 1.9 });
+    const profile = calculateFundingProfile(state.cash, state.loans, state.deposits, state.wholesaleFunding);
+    const ratios = calculateRatios(state.cash, state.loans, state.deposits, state.wholesaleFunding, state.compliance, state.nplRatio, state.reputation, state.satisfaction);
+    const contributions = getRiskContributions({ ...state, ...ratios });
+
+    expect(profile.equity).toBeGreaterThan(state.loans);
+    expect(profile.fundingGap).toBe(0);
+    expect(profile.riskPoints).toBeLessThanOrEqual(70);
+    expect(Number.isFinite(ratios.riskScore)).toBe(true);
+    expect(ratios.riskScore).toBeLessThan(70);
+    expect(contributions.find((item) => item.key === "funding")?.points).toBe(profile.riskPoints);
+  });
+
+  it("borrows and repays selectable wholesale amounts in one action", () => {
+    const state = activeGame({ cash: 20_000_000, wholesaleFunding: 0 });
+    const borrowed = raiseWholesaleFunding(state, 50_000_000);
+    const repaid = repayWholesaleFunding(borrowed, 25_000_000);
+
+    expect(borrowed.cash - state.cash).toBe(50_000_000);
+    expect(borrowed.wholesaleFunding).toBe(50_000_000);
+    expect(repaid.cash).toBe(borrowed.cash - 25_000_000);
+    expect(repaid.wholesaleFunding).toBe(25_000_000);
+    expect(Number.isFinite(repaid.riskScore)).toBe(true);
+  });
+});
+
+describe("v0.8.12 branch economics", () => {
+  it("shows a reachable break-even path for an underused first branch", () => {
+    const base = activeGame({ cash: 20_000_000 });
+    const branch = { ...base.branchOffices[0], localCustomers: 233, localDeposits: 5_300_000, localLoans: 2_700_000 };
+    const state = { ...base, branchOffices: [branch] };
+    const diagnosis = getBranchDiagnosisV89(state, branch);
+    const metrics = branchMetricsV89(state, branch);
+
+    expect(diagnosis.breakEvenCustomers).toBeGreaterThan(metrics.customers);
+    expect(diagnosis.breakEvenCustomers).toBeLessThanOrEqual(branch.capacity);
+    expect(diagnosis.customersToBreakEven).toBe(diagnosis.breakEvenCustomers - metrics.customers);
+    expect(metrics.cost).toBe(metrics.staffing + metrics.rent + metrics.localActivity);
+  });
+
+  it("rejects low-demand upgrades and gives a finite profitable plan near capacity", () => {
+    const base = activeGame({ cash: 20_000_000 });
+    const lowDemand = { ...base.branchOffices[0], localCustomers: 145, localDeposits: 3_000_000, localLoans: 1_800_000 };
+    const lowState = { ...base, branchOffices: [lowDemand] };
+    const lowPlan = getBranchUpgradeEconomicsV7(lowState, lowDemand);
+    const lowAssessment = getBranchUpgradePlanV89(lowState, lowDemand.id)!;
+
+    expect(lowPlan.viable).toBe(false);
+    expect(lowPlan.paybackMonths).toBeNull();
+    expect(lowAssessment.canStart).toBe(false);
+
+    const nearCapacity = { ...lowDemand, localCustomers: 505, localDeposits: 12_000_000, localLoans: 8_000_000 };
+    const strongState = { ...base, branchOffices: [nearCapacity] };
+    const strongPlan = getBranchUpgradeEconomicsV7(strongState, nearCapacity);
+
+    expect(strongPlan.viable).toBe(true);
+    expect(strongPlan.monthlyProfitGain).toBeGreaterThan(0);
+    expect(strongPlan.paybackMonths).not.toBeNull();
+    expect(strongPlan.paybackMonths!).toBeGreaterThan(0);
+    expect(strongPlan.paybackMonths!).toBeLessThan(120);
+  });
+});
+
+describe("v0.8.12 service recovery", () => {
+  it("runs team reassignment for 30 days and improves overloaded service", () => {
+    const complaint = DECISIONS.find((decision) => decision.id === "complaint-wave")!;
+    const initial = activeGame({ satisfaction: 29, customers: 5_000, employees: 25, digitalLevel: 28, pendingDecision: complaint, objectives: [], competitors: [] });
+    const chosen = chooseDecision(initial, "reassign-teams");
+    let treated = chosen;
+    let untreated = { ...initial, pendingDecision: null };
+
+    expect(chosen.serviceIntervention?.endDay).toBe(chosen.day + 30);
+    for (let day = 0; day < 30; day += 1) {
+      treated = advanceDay({ ...treated, pendingDecision: null, gameOverReason: null });
+      untreated = advanceDay({ ...untreated, pendingDecision: null, gameOverReason: null });
+    }
+
+    expect(treated.serviceIntervention).toBeNull();
+    expect(treated.satisfaction).toBeGreaterThan(chosen.satisfaction);
+    expect(treated.satisfaction).toBeGreaterThan(untreated.satisfaction + 5);
+    expect(treated.events.some((event) => event.title === "Service team reassignment completed")).toBe(true);
+  });
+});
+
+describe("v0.8.12 executive recruitment", () => {
+  it("returns only the three strongest candidates for the selected role", () => {
+    const state = activeGame();
+    const shortlist = shortlistExecutiveCandidates(state.candidatePool, "CFO", 3);
+    const fits = shortlist.map((candidate) => executiveRoleFit(candidate, "CFO"));
+
+    expect(shortlist).toHaveLength(3);
+    expect(new Set(shortlist.map((candidate) => candidate.id)).size).toBe(3);
+    expect(fits).toEqual([...fits].sort((a, b) => b - a));
+    const allRanked = shortlistExecutiveCandidates(state.candidatePool, "CFO", state.candidatePool.length);
+    expect(shortlist.map((candidate) => candidate.id)).toEqual(allRanked.slice(0, 3).map((candidate) => candidate.id));
   });
 });
