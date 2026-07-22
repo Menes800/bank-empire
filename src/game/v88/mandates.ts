@@ -1,5 +1,5 @@
 import { startBranchUpgrade } from "../v4/gameplay";
-import { resolveInboxDecision, takeCollectionAction, type CollectionAction } from "../v7/gameplay";
+import { getBranchUpgradeEconomicsV7, resolveInboxDecision, takeCollectionAction, type CollectionAction } from "../v7/gameplay";
 import { advanceDaysV8, getWorkforceDepartments } from "../v8/gameplay";
 import type { ExecutiveMandate, ExecutivePermission, ExecutiveRole, GameState, ManagementLogEntry, MandatePreset } from "../types";
 import { addEvent, clamp, createEvent, round } from "../utils";
@@ -152,16 +152,35 @@ function taskEstimate(state: GameState, task: InboxTask, role: ExecutiveRole) {
   return { cost: 50_000, risk: 35 };
 }
 
+function branchUpgradeAuthorityReason(state: GameState, task: InboxTask, cost: number): string | null {
+  if (task.category !== "network" || taskPermission(state, task) !== "localUpgrades") return null;
+  const branch = findTaskBranch(state, task);
+  if (!branch) return "The branch requiring approval could not be identified";
+  if (branch.managerControl === false) return "Local operations are reserved for CEO control";
+  const authority = branch.upgradeAuthority ?? "manual";
+  if (authority === "manual") return "Branch upgrades are reserved for CEO approval";
+  if (authority === "small" && (branch.level !== 1 || cost > 1_250_000)) return "The upgrade exceeds the branch's small-investment authority";
+  if (authority === "profitable") {
+    const economics = getBranchUpgradeEconomicsV7(state, branch);
+    if (!economics.viable || economics.paybackMonths === null) return "The upgrade is not forecast to improve monthly profit";
+    const paybackMonths = economics.paybackMonths;
+    if (paybackMonths > 24) return `Expected payback of ${paybackMonths.toFixed(0)} months exceeds branch authority`;
+  }
+  return null;
+}
+
 export function getMandateAssessmentV88(state: GameState, task: InboxTask): MandateTaskAssessmentV88 {
   const role = effectiveRole(task);
   const permission = taskPermission(state, task);
   const executive = role ? state.employeeRoster.find((employee) => employee.executiveRole === role) : undefined;
   const estimate = role ? taskEstimate(state, task, role) : { cost: 0, risk: 100 };
   const alwaysCEO = task.urgency === "critical" || /acquisition|capital raise|executive dismissal/i.test(task.title);
+  const authorityReason = role ? branchUpgradeAuthorityReason(state, task, estimate.cost) : null;
   let reason = "Within mandate";
   if (!role) reason = "No executive owner is assigned";
   else if (!executive) reason = `Appoint a ${role} first`;
   else if (alwaysCEO) reason = "Critical or strategic matters always stay with the CEO";
+  else if (authorityReason) reason = authorityReason;
   else if (!state.executiveMandates[role].permissions.includes(permission)) reason = `${permission} is not included in the ${role} mandate`;
   else if (estimate.cost > state.executiveMandates[role].spendLimit) reason = `Authority required: ${estimate.cost.toLocaleString(state.locale)} ${state.currency}; mandate limit is ${state.executiveMandates[role].spendLimit.toLocaleString(state.locale)} ${state.currency}`;
   else if (estimate.risk > state.executiveMandates[role].riskLimit) reason = `Estimated risk ${estimate.risk.toFixed(0)} exceeds the mandate limit of ${state.executiveMandates[role].riskLimit.toFixed(0)}`;

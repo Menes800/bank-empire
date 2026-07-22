@@ -1,5 +1,5 @@
 import type { BoardObjective, GameState, ObjectiveMetric } from "./types";
-import { addEvent, clamp, createEvent } from "./utils";
+import { addEvent, clamp, createEvent, seededValue } from "./utils";
 
 function objectiveValue(state: GameState, metric: ObjectiveMetric): number {
   return state[metric];
@@ -73,7 +73,7 @@ export function createObjectives(
     },
   ];
 
-  const offset = Math.floor(Math.random() * pool.length);
+  const offset = Math.floor(seededValue(`${state.worldSeed}-${startDay}-objectives`) * pool.length);
   return [
     pool[offset],
     pool[(offset + 2) % pool.length],

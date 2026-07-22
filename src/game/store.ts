@@ -1,9 +1,38 @@
-import { defaultExecutiveMandates, emptyGame, repairCampaignState } from "./engine";
+import { defaultExecutiveMandates, emptyGame, getBranchEconomicsV7, repairCampaignState } from "./engine";
 import type { EmployeeDepartment, EmployeeProfile, GameState } from "./types";
+import { addEvent, calculateRatios, clamp, createEvent, normaliseCurrencyTextState, round } from "./utils";
 
 const STORAGE_KEY = "bank-empire-save-v4";
 const CHECKPOINT_KEY = "bank-empire-checkpoint-v5";
+const CORRUPT_SAVE_KEY = "bank-empire-corrupt-save-v4";
 const LEGACY_KEYS = ["bank-empire-save-v3", "bank-empire-save-v2", "bank-empire-save-v1"];
+
+function preserveCorruptSave(raw: string): void {
+  try {
+    if (localStorage.getItem(CORRUPT_SAVE_KEY)) return;
+    localStorage.setItem(CORRUPT_SAVE_KEY, JSON.stringify({
+      capturedAt: new Date().toISOString(),
+      raw,
+    }));
+  } catch {
+    // Loading must still fall back safely if storage is full or unavailable.
+  }
+}
+
+function checkpointPeriod(day: number): number {
+  return Math.floor(Math.max(0, day) / 30);
+}
+
+function savedCheckpointPeriod(): number {
+  try {
+    const saved = localStorage.getItem(CHECKPOINT_KEY);
+    if (!saved) return 0;
+    const parsed = JSON.parse(saved) as Partial<GameState>;
+    return checkpointPeriod(parsed.day ?? 0);
+  } catch {
+    return 0;
+  }
+}
 
 function inferDepartment(employee: EmployeeProfile): EmployeeDepartment {
   if (employee.executiveRole) return "Executive";
@@ -42,11 +71,47 @@ function migrateEmployee(employee: EmployeeProfile): EmployeeProfile {
   };
 }
 
+function depositBalancePerCustomer(state: GameState) {
+  const productValue =
+    (state.products.includes("savings") ? 8_000 : 0) +
+    (state.products.includes("wealth") ? 10_000 : 0) +
+    (state.products.includes("sme") ? 6_000 : 0) +
+    (state.products.includes("cards") ? 1_500 : 0);
+  return clamp(18_000 + productValue + state.reputation * 100, 18_000, 46_000);
+}
+
+function repairDepositBase(state: GameState): GameState {
+  const target = state.customers * depositBalancePerCustomer(state);
+  const localDeposits = state.branchOffices.reduce((sum, branch) => sum + (branch.localDeposits ?? 0), 0);
+  if (state.customers < 50 || state.deposits >= Math.max(localDeposits, target * .1)) return state;
+  const deposits = round(Math.max(localDeposits, target * .72, 1_000_000));
+  const increase = Math.max(0, deposits - state.deposits);
+  const cash = state.cash + increase;
+  const ratios = calculateRatios(cash, state.loans, deposits, state.wholesaleFunding, state.compliance, state.nplRatio, state.reputation, state.satisfaction);
+  return addEvent(
+    { ...state, cash, deposits, ...ratios },
+    createEvent(state.day, "positive", "Customer deposit base reconciled", `Legacy customer accounts were restored to ${deposits.toLocaleString(state.locale)} ${state.currency}. Matching cash and deposit liabilities were added without changing shareholder equity.`),
+  );
+}
+
+function refreshDerivedEconomics(state: GameState): GameState {
+  const ratios = calculateRatios(state.cash, state.loans, state.deposits, state.wholesaleFunding, state.compliance, state.nplRatio, state.reputation, state.satisfaction);
+  const current = { ...state, ...ratios };
+  return {
+    ...current,
+    branchOffices: current.branchOffices.map((branch) => {
+      const economics = getBranchEconomicsV7(current, branch);
+      return { ...branch, lastMonthRevenue: economics.revenue, lastMonthCost: economics.cost, lastMonthProfit: economics.profit };
+    }),
+  };
+}
+
 export function loadGame(): GameState {
+  let saved: string | null = null;
   try {
     const current = localStorage.getItem(STORAGE_KEY);
     const legacy = LEGACY_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
-    const saved = current ?? legacy;
+    saved = current ?? legacy ?? null;
     if (!saved) return emptyGame();
 
     const parsed = JSON.parse(saved) as Partial<GameState> & { version?: number };
@@ -72,6 +137,7 @@ export function loadGame(): GameState {
       achievements: parsed.achievements ?? [],
       loanApplications: parsed.loanApplications ?? [],
       pendingDecision: parsed.pendingDecision ?? null,
+      serviceIntervention: parsed.serviceIntervention && parsed.serviceIntervention.endDay > (parsed.day ?? 1) ? parsed.serviceIntervention : null,
       gameOverReason: parsed.gameOverReason ?? null,
       districts: parsed.districts ?? base.districts,
       branchOffices: (parsed.branchOffices ?? base.branchOffices).map((branch) => ({
@@ -125,10 +191,11 @@ export function loadGame(): GameState {
       devModeUsed: parsed.devModeUsed ?? false,
       bankruptcyProtection: parsed.bankruptcyProtection ?? false,
     };
-    const repaired = repairCampaignState(migrated);
+    const repaired = normaliseCurrencyTextState(refreshDerivedEconomics(repairCampaignState(repairDepositBase(migrated))));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(repaired));
     return repaired;
   } catch {
+    if (saved) preserveCorruptSave(saved);
     return emptyGame();
   }
 }
@@ -136,7 +203,8 @@ export function loadGame(): GameState {
 export function saveGame(state: GameState): void {
   const repaired = repairCampaignState(state);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(repaired));
-  if (repaired.setupComplete && !repaired.gameOverReason && !repaired.pendingDecision && repaired.day >= 30 && repaired.day % 30 === 0) {
+  const period = checkpointPeriod(repaired.day);
+  if (repaired.setupComplete && !repaired.gameOverReason && !repaired.pendingDecision && period >= 1 && period > savedCheckpointPeriod()) {
     localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(repaired));
   }
 }
@@ -151,7 +219,7 @@ export function restoreCheckpoint(): GameState | null {
     if (!saved) return null;
     const state = JSON.parse(saved) as GameState;
     const base = emptyGame();
-    const restored = repairCampaignState({
+    const restored = refreshDerivedEconomics(repairCampaignState({
       ...base,
       ...state,
       version: 88,
@@ -167,7 +235,7 @@ export function restoreCheckpoint(): GameState | null {
       gameOverReason: null,
       liquidityBreachDays: 0,
       capitalBreachDays: 0,
-    });
+    }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(restored));
     return restored;
   } catch {

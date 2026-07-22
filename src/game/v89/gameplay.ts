@@ -1,7 +1,8 @@
 import { approveLoanRefined, counterLoanRefined, declineLoanRefined, startBranchUpgrade, startStrategicProject } from "../v4/gameplay";
 import { getCreditRecommendation } from "../v6/gameplay";
-import type { BankProject, BranchOffice, ExecutivePermission, ExecutiveRole, GameState, LoanApplication, ManagementLogEntry, ProjectKind } from "../types";
-import { clamp, round } from "../utils";
+import { getBranchEconomicsV7, getBranchUpgradeEconomicsV7 } from "../v7/gameplay";
+import type { BankProject, BranchOffice, CashFlowSnapshot, ExecutivePermission, ExecutiveRole, GameState, LoanApplication, ManagementLogEntry, ProjectKind } from "../types";
+import { clamp, normaliseCurrencyTextState, round } from "../utils";
 import { advanceDaysV889, delegateInboxTaskV88, getMandateAssessmentV88 } from "../v88/mandates";
 import { repairCampaignState } from "../v88/gameplay";
 
@@ -160,18 +161,61 @@ export function reconcileManagementV89(state: GameState): GameState {
     if (assessment.canExecute) next = delegateInboxTaskV89(next, task.id);
   }
   next = processCreditApplicationsV89(next);
-  return next;
+  return normaliseCurrencyTextState(next);
+}
+
+function continuousCashHistory(state: GameState): GameState {
+  const rows = state.cashFlowHistory;
+  if (rows.length === 0) return state;
+  const last = rows[rows.length - 1];
+  if (Math.abs(last.closingCash - state.cash) > 2) return { ...state, cashFlowHistory: [] };
+
+  let start = rows.length - 1;
+  for (let index = rows.length - 1; index > 0; index -= 1) {
+    const current = rows[index];
+    const previous = rows[index - 1];
+    const identity = current.openingCash + current.depositInflows - current.customerWithdrawals + current.loanRepayments - current.newLending + current.operatingProfit + current.fundingChange + current.otherMovements;
+    if (Math.abs(identity - current.closingCash) > 2 || Math.abs(previous.closingCash - current.openingCash) > 2) break;
+    start = index - 1;
+  }
+  return start === 0 ? state : { ...state, cashFlowHistory: rows.slice(start) };
 }
 
 export function advanceDaysV89(state: GameState, days: number): GameState {
-  let current = reconcileManagementV89(state);
+  let current = continuousCashHistory(reconcileManagementV89(state));
   for (let index = 0; index < days; index += 1) {
+    const beforeState = current;
     const before = current.day;
     current = advanceDaysV889(current, 1);
     if (current.day === before) break;
     current = reconcileManagementV89(current);
+    current = continuousCashHistory(reconcileCashFlowV89(beforeState, current));
   }
   return current;
+}
+
+function reconcileCashFlowV89(before: GameState, after: GameState): GameState {
+  const depositChange = after.deposits - before.deposits;
+  const loanChange = after.loans - before.loans;
+  const fundingChange = after.wholesaleFunding - before.wholesaleFunding;
+  const depositInflows = Math.max(0, depositChange);
+  const customerWithdrawals = Math.max(0, -depositChange);
+  const newLending = Math.max(0, loanChange);
+  const loanRepayments = Math.max(0, -loanChange);
+  const knownClosing = before.cash + depositInflows - customerWithdrawals + loanRepayments - newLending + after.profit + fundingChange;
+  const snapshot: CashFlowSnapshot = {
+    day: after.day,
+    openingCash: before.cash,
+    depositInflows,
+    customerWithdrawals,
+    loanRepayments,
+    newLending,
+    operatingProfit: after.profit,
+    fundingChange,
+    otherMovements: after.cash - knownClosing,
+    closingCash: after.cash,
+  };
+  return { ...after, cashFlowHistory: [...after.cashFlowHistory.filter((row) => row.day !== after.day), snapshot].slice(-120) };
 }
 
 export function getProgrammeAssessmentV89(state: GameState, kind: StrategicProgrammeKind) {
@@ -205,50 +249,52 @@ export function startProgrammeV89(state: GameState, kind: StrategicProgrammeKind
   return logAction(started, { role, title: assessment.config.title, detail, amount: assessment.config.budget, outcome: "completed" });
 }
 
-export function branchMetricsV89(branch: BranchOffice) {
-  const customers = branch.localCustomers ?? Math.min(branch.capacity, 260 + branch.level * 100);
-  const revenue = branch.lastMonthRevenue ?? customers * 70;
-  const staffing = branch.staffSlots * 5_400;
-  const rent = branch.monthlyRent;
+export function branchMetricsV89(state: GameState, branch: BranchOffice) {
+  const economics = getBranchEconomicsV7(state, branch);
+  const customers = economics.customers;
+  const revenue = branch.lastMonthRevenue ?? economics.revenue;
+  const staffing = economics.payroll;
+  const rent = economics.rent;
   const managerCost = 0;
-  const localActivity = branch.managerBudget ?? 0;
-  const cost = branch.lastMonthCost ?? rent + staffing + managerCost + localActivity;
-  const profit = branch.lastMonthProfit ?? revenue - cost;
+  const localActivity = economics.marketing + economics.operations;
+  const cost = branch.lastMonthCost ?? economics.cost;
+  const profit = branch.lastMonthProfit ?? economics.profit;
   const capacityUse = customers / Math.max(1, branch.capacity) * 100;
-  return { customers, revenue, staffing, rent, managerCost, localActivity, cost, profit, capacityUse, deposits: branch.localDeposits ?? 0, loans: branch.localLoans ?? 0 };
+  return { customers, revenue, staffing, rent, managerCost, localActivity, cost, profit, capacityUse, deposits: economics.deposits, loans: economics.loans };
 }
 
 export function getBranchDiagnosisV89(state: GameState, branch: BranchOffice) {
-  const metrics = branchMetricsV89(branch);
+  const metrics = branchMetricsV89(state, branch);
   const district = state.districts.find((item) => item.id === branch.districtId);
+  const revenuePerCustomer = metrics.revenue / Math.max(1, metrics.customers);
+  const breakEvenCustomers = Math.ceil(metrics.cost / Math.max(1, revenuePerCustomer));
+  const customersToBreakEven = Math.max(0, breakEvenCustomers - metrics.customers);
   const reasons: string[] = [];
   if (metrics.customers < branch.capacity * .5) reasons.push("Customer volume is too low for the current cost base");
   if (metrics.staffing > metrics.revenue * .55) reasons.push("Staffing cost is high relative to local revenue");
   if (metrics.rent > metrics.revenue * .28) reasons.push("Rent is consuming a large share of revenue");
   if ((district?.competition ?? 0) > 65) reasons.push("Local competition is limiting customer acquisition");
   if (!branch.managerId) reasons.push("No accountable branch manager is in place");
-  const recommendation = metrics.capacityUse > 92 ? "Prepare a capacity upgrade" : metrics.profit < 0 ? "Run a profitability recovery plan" : metrics.capacityUse < 55 ? "Build local demand before adding capacity" : "Maintain the current operating plan";
-  return { metrics, reasons: reasons.length ? reasons : ["No material structural weakness detected"], recommendation };
+  if (breakEvenCustomers > branch.capacity) reasons.push("The current capacity cannot reach break-even without lower fixed costs or stronger product economics");
+  const recommendation = metrics.capacityUse > 92 ? "Prepare a capacity upgrade" : metrics.profit < 0 && breakEvenCustomers <= branch.capacity ? `Build ${customersToBreakEven.toLocaleString(state.locale)} more customers to reach break-even` : metrics.profit < 0 ? "Reduce fixed costs before investing further" : metrics.capacityUse < 55 ? "Build local demand before adding capacity" : "Maintain the current operating plan";
+  return { metrics, reasons: reasons.length ? reasons : ["No material structural weakness detected"], recommendation, breakEvenCustomers, customersToBreakEven };
 }
 
 export function getBranchUpgradePlanV89(state: GameState, branchId: string) {
   const branch = state.branchOffices.find((item) => item.id === branchId);
   if (!branch) return null;
-  const metrics = branchMetricsV89(branch);
-  const cost = branch.level === 1 ? 1_150_000 : branch.level === 2 ? 2_100_000 : 0;
-  const capacityGain = branch.level < 3 ? round(branch.capacity * .45) : 0;
-  const monthlyRevenueGain = Math.max(28_000, metrics.profit * .28 + Math.max(0, metrics.capacityUse - 78) * 4_200);
-  const monthlyCostGain = branch.level < 3 ? branch.staffSlots * 1_350 + 18_000 : 0;
-  const monthlyProfitGain = monthlyRevenueGain - monthlyCostGain;
-  const paybackMonths = cost / Math.max(1, monthlyProfitGain);
-  const risk = clamp(24 + Math.max(0, 70 - metrics.capacityUse) * .25, 12, 55);
+  const economics = getBranchUpgradeEconomicsV7(state, branch);
+  const { cost, capacityGain, monthlyRevenueGain, monthlyCostGain, monthlyProfitGain, paybackMonths } = economics;
+  const risk = clamp(24 + Math.max(0, 70 - economics.capacityUse) * .25, 12, 55);
   const coo = state.employeeRoster.find((employee) => employee.executiveRole === "COO");
   const mandate = state.executiveMandates.COO;
   const authority = branch.upgradeAuthority ?? "manual";
-  const authorityAllows = authority === "small" ? branch.level === 1 && cost <= 1_250_000 : authority === "profitable" ? paybackMonths <= 24 : false;
+  const authorityAllows = economics.viable && (authority === "small" ? branch.level === 1 && cost <= 1_250_000 : authority === "profitable" ? paybackMonths !== null && paybackMonths <= 24 : false);
   const canDelegate = Boolean(coo && mandate.permissions.includes("localUpgrades") && authorityAllows && cost <= mandate.spendLimit && risk <= mandate.riskLimit && state.cash >= cost);
   const reasons: string[] = [];
   if (branch.level >= 3) reasons.push("Branch is already at maximum level");
+  if (economics.capacityUse < 75) reasons.push(`Build demand before upgrading; capacity use is only ${economics.capacityUse.toFixed(0)}%`);
+  if (monthlyProfitGain <= 0) reasons.push(`The upgrade would reduce monthly profit by ${Math.abs(monthlyProfitGain).toLocaleString(state.locale)} ${state.currency}`);
   if (state.projects.some((project) => project.branchId === branch.id && project.status !== "completed")) reasons.push("An upgrade is already active");
   if (state.cash < cost) reasons.push(`Need ${cost.toLocaleString(state.locale)} ${state.currency} liquid cash`);
   if (!coo) reasons.push("COO position is vacant");
@@ -256,7 +302,7 @@ export function getBranchUpgradePlanV89(state: GameState, branchId: string) {
   if (!authorityAllows) reasons.push(authority === "manual" ? "Branch rules reserve upgrades for the CEO" : "The upgrade does not meet the branch authority rule");
   if (cost > mandate.spendLimit) reasons.push(`Cost exceeds the COO limit of ${mandate.spendLimit.toLocaleString(state.locale)} ${state.currency}`);
   if (risk > mandate.riskLimit) reasons.push(`Risk ${risk.toFixed(0)} exceeds the COO limit of ${mandate.riskLimit.toFixed(0)}`);
-  return { branch, cost, capacityGain, monthlyRevenueGain, monthlyCostGain, monthlyProfitGain, paybackMonths, risk, canDelegate, canStart: branch.level < 3 && !state.projects.some((project) => project.branchId === branch.id && project.status !== "completed") && state.cash >= cost, reasons, cooName: coo?.name };
+  return { branch, cost, capacityGain, monthlyRevenueGain, monthlyCostGain, monthlyProfitGain, paybackMonths, risk, canDelegate, canStart: economics.viable && !state.projects.some((project) => project.branchId === branch.id && project.status !== "completed") && state.cash >= cost, reasons, cooName: coo?.name };
 }
 
 export function approveBranchUpgradeV89(state: GameState, branchId: string, approvedByCEO = false): GameState {

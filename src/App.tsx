@@ -54,7 +54,7 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [reputationOpen, setReputationOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
-  const [versionClicks, setVersionClicks] = useState(0);
+  const [, setVersionClicks] = useState(0);
   const [collapsed, setCollapsed] = useState<Record<NavGroup["key"], boolean>>({ bank: false, management: false, group: false });
 
   setMoneyContext(game.currency, game.locale);

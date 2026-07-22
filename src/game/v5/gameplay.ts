@@ -34,6 +34,12 @@ export function bestExecutiveRole(employee: EmployeeProfile): { role: ExecutiveR
     .sort((a, b) => b.fit - a.fit)[0];
 }
 
+export function shortlistExecutiveCandidates(candidates: EmployeeProfile[], role: ExecutiveRole, limit = 3) {
+  return [...candidates]
+    .sort((a, b) => executiveRoleFit(b, role) - executiveRoleFit(a, role) || b.leadership - a.leadership || a.salary - b.salary)
+    .slice(0, Math.max(0, limit));
+}
+
 export function getFounderBonuses(state: GameState) {
   const educationSaving = state.educationLevel * 0.8;
   const careerSaving = state.careerLevel * 0.55;

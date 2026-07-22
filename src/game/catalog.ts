@@ -53,6 +53,13 @@ export const PRODUCT_CATALOG: Record<
   },
 };
 
+export const SERVICE_REASSIGNMENT = {
+  durationDays: 30,
+  serviceCapacityMultiplier: 2,
+  customerGrowthMultiplier: 0.65,
+  minimumDailyServiceChange: 0.28,
+} as const;
+
 export const DECISIONS: DecisionEvent[] = [
   {
     id: "complaint-wave",

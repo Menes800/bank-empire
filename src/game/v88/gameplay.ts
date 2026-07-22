@@ -1,4 +1,4 @@
-import { deriveCampaignStage, startBranchUpgrade } from "../v4/gameplay";
+import { deriveCampaignStage } from "../v4/gameplay";
 import { advanceDaysV8 } from "../v8/gameplay";
 import { delegateInboxTask, takeCollectionAction } from "../v7/gameplay";
 import type { BankProject, BranchProfile, CampaignStage, ExecutiveMandate, ExecutivePermission, ExecutiveRole, GameEvent, GameState, ManagementLogEntry, MandatePreset } from "../types";

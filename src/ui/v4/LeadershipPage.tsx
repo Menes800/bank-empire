@@ -13,6 +13,7 @@ import {
 } from "../../game/engine";
 import type { ExecutiveRole, GameState, MandatePreset } from "../../game/store";
 import type { EmployeeProfile } from "../../game/types";
+import { monthlyPayrollCost } from "../../game/utils";
 import type { GameAction } from "../common";
 import { money } from "../format";
 
@@ -36,7 +37,7 @@ export function LeadershipPage({ game, action }: { game: GameState; action: Game
   const [candidateId, setCandidateId] = useState(game.candidatePool[0]?.id ?? "");
   const selected = game.employeeRoster.find((employee) => employee.id === selectedId) ?? game.employeeRoster[0];
   const selectedCandidate = game.candidatePool.find((employee) => employee.id === candidateId) ?? game.candidatePool[0];
-  const totalPayroll = game.employeeRoster.reduce((sum, employee) => sum + employee.salary, 0);
+  const totalPayroll = monthlyPayrollCost(game);
   const averagePerformance = game.employeeRoster.reduce((sum, employee) => sum + (employee.performance ?? employee.skill), 0) / Math.max(1, game.employeeRoster.length);
   const averageWellbeing = game.employeeRoster.reduce((sum, employee) => sum + (employee.wellbeing ?? employee.energy), 0) / Math.max(1, game.employeeRoster.length);
   const overloaded = departments.filter((department) => department.status === "overloaded").length;
@@ -51,7 +52,7 @@ export function LeadershipPage({ game, action }: { game: GameState; action: Game
     </section>
 
     <section className="workforce-kpi-row">
-      <Metric label="Employees" value={`${game.employeeRoster.length}`} /><Metric label="Monthly payroll" value={money.format(totalPayroll)} />
+      <Metric label="Employees" value={`${game.employees}`} /><Metric label="Monthly payroll" value={money.format(totalPayroll)} />
       <Metric label="Average performance" value={`${averagePerformance.toFixed(0)}`} tone={averagePerformance >= 72 ? "positive" : "warning"} />
       <Metric label="Overloaded teams" value={`${overloaded}`} tone={overloaded > 0 ? "warning" : "positive"} /><Metric label="Retention risk" value={`${retentionRisk}`} tone={retentionRisk > 0 ? "warning" : "positive"} />
     </section>
@@ -98,7 +99,7 @@ export function LeadershipPage({ game, action }: { game: GameState; action: Game
 
     <section className="panel candidate-market-v88">
       <div className="panel-heading"><div><p className="eyebrow">LIVE TALENT MARKET</p><h3>Seeded candidates who come and go</h3><p>The same save produces the same people and histories. Availability, salary, loyalty, ambition and opinions differ.</p></div><span className="status">{game.candidatePool.length} available</span></div>
-      <div className="candidate-market-layout-v88"><div className="candidate-list-v88">{candidates.map((candidate) => { const best = bestExecutiveRole(candidate); return <button key={candidate.id} className={selectedCandidate?.id === candidate.id ? "selected" : ""} onClick={() => setCandidateId(candidate.id)}><span>{candidate.name.split(" ").map((part) => part[0]).join("")}</span><div><strong>{candidate.name}</strong><small>{candidate.role} · {candidate.nationality}</small><em>{candidate.leadershipStyle} · {best.role} {best.fit}%</em></div><b>{money.format(candidate.salary)}/mo</b></button>; })}</div>
+      <div className="candidate-market-layout-v88"><div className="candidate-list-v88">{candidates.map((candidate) => { const best = bestExecutiveRole(candidate); return <button key={candidate.id} className={selectedCandidate?.id === candidate.id ? "selected" : ""} onClick={() => setCandidateId(candidate.id)}><span>{candidate.name.split(" ").map((part) => part[0]).join("")}</span><div><strong>{candidate.name}</strong><small>{candidate.role} · {candidate.nationality}</small><em>{candidate.leadershipStyle} · {best.role} {best.fit}%</em></div><b>{money.format(candidate.salary)}/yr</b></button>; })}</div>
         {selectedCandidate && <aside className="candidate-detail-v88"><ProfileHeader employee={selectedCandidate} label="CANDIDATE DOSSIER" /><div className="employee-detail-grid"><Metric label="Skill" value={`${selectedCandidate.skill}`} /><Metric label="Leadership" value={`${selectedCandidate.leadership}`} /><Metric label="Loyalty" value={`${selectedCandidate.loyalty}`} /><Metric label="Ambition" value={`${selectedCandidate.ambition ?? 50}`} /><Metric label="Board relation" value={`${selectedCandidate.boardRelationship ?? 50}`} /><Metric label="Available until" value={`Day ${selectedCandidate.availableUntilDay ?? "—"}`} /></div><PersonStory employee={selectedCandidate} /><div className="candidate-actions-v88">{executiveRoles.map((role) => <button key={role} className={bestExecutiveRole(selectedCandidate).role === role ? "primary" : "secondary"} disabled={game.cash < selectedCandidate.salary * 2 || executiveRoleFit(selectedCandidate, role) < 58} onClick={() => action((state) => hireCandidateToRole(state, selectedCandidate.id, role))}>Hire as {role} · {executiveRoleFit(selectedCandidate, role)}%</button>)}</div></aside>}
       </div>
     </section>

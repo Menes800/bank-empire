@@ -11,22 +11,13 @@ import type {
   ExecutiveRole,
   GameState,
 } from "../types";
-import { addEvent, clamp, createEvent, round } from "../utils";
+import { addEvent, clamp, createEvent, round, seededValue } from "../utils";
 
 export type BranchFundingMode = "cash" | "financed";
 export type CollectionAction = "reminder" | "payment-plan" | "external-collections" | "enforce-collateral" | "write-off";
 
 const stageOrder = ["startup", "regional", "national", "group", "empire"] as const;
 const nonPerformingStatuses = new Set(["overdue", "collections", "defaulted", "delinquent"]);
-
-function deterministic(seed: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 4294967295;
-}
 
 function taskExists(state: GameState, sourceId: string, category: CEOInboxTask["category"]) {
   return state.ceoInbox.some((task) => task.sourceId === sourceId && task.category === category && task.status === "open");
@@ -65,14 +56,85 @@ function demandForProfile(branch: BranchOffice, district: GameState["districts"]
   return district.retailDemand;
 }
 
+function branchWeight(branch: BranchOffice, kind: "deposits" | "loans") {
+  const customers = Math.max(40, branch.localCustomers ?? 0);
+  const profile = kind === "deposits"
+    ? branch.profile === "wealth" ? 1.45 : branch.profile === "business" ? 1.25 : 1
+    : branch.profile === "mortgage" ? 1.5 : branch.profile === "business" ? 1.35 : branch.profile === "wealth" ? 1.15 : 1;
+  return customers * profile;
+}
+
+function syncBranchBalanceSheet(state: GameState): GameState {
+  if (state.branchOffices.length === 0) return state;
+  const localCustomers = state.branchOffices.reduce((sum, branch) => sum + Math.max(0, branch.localCustomers ?? 0), 0);
+  const localCoverage = clamp(localCustomers / Math.max(1, state.customers), .2, 1);
+  const depositPool = state.deposits * clamp(.42 + localCoverage * .35, .45, .78);
+  const loanPool = state.loans * clamp(.38 + localCoverage * .34, .42, .72);
+  const depositWeight = state.branchOffices.reduce((sum, branch) => sum + branchWeight(branch, "deposits"), 0);
+  const loanWeight = state.branchOffices.reduce((sum, branch) => sum + branchWeight(branch, "loans"), 0);
+  return {
+    ...state,
+    branchOffices: state.branchOffices.map((branch) => ({
+      ...branch,
+      localDeposits: round(depositPool * branchWeight(branch, "deposits") / Math.max(1, depositWeight)),
+      localLoans: round(loanPool * branchWeight(branch, "loans") / Math.max(1, loanWeight)),
+    })),
+  };
+}
+
+export function getBranchEconomicsV7(state: GameState, branch: BranchOffice) {
+  const employees = state.employeeRoster.filter((employee) => employee.assignedBranchId === branch.id || employee.id === branch.managerId);
+  const unnamedEmployees = Math.max(0, state.employees - state.employeeRoster.length);
+  const totalBranchSlots = state.branchOffices.reduce((sum, office) => sum + office.staffSlots, 0);
+  const allocatedUnnamedEmployees = unnamedEmployees * branch.staffSlots / Math.max(1, totalBranchSlots);
+  const operationsEfficiency = state.background === "Operations" ? .9 : 1;
+  const annualPayroll = (employees.reduce((sum, employee) => sum + employee.salary, 0) + allocatedUnnamedEmployees * 52_000) * operationsEfficiency;
+  const payroll = round(annualPayroll / 12);
+  const priority = branch.operatingPriority ?? "balanced";
+  const requestedMarketing = branch.managerBudget ?? 0;
+  const marketingCap = priority === "profitability" ? 10_000 : priority === "balanced" ? 25_000 : priority === "deposits" || priority === "business" ? 35_000 : 60_000;
+  const marketing = Math.min(requestedMarketing, marketingCap);
+  const operations = 6_000 + branch.level * 2_500 + employees.length * 600;
+  const rent = round(branch.monthlyRent);
+  const cost = round(rent + payroll + marketing + operations);
+  const customers = branch.localCustomers ?? Math.min(branch.capacity, 220 + branch.level * 85);
+  const deposits = branch.localDeposits ?? 0;
+  const loans = branch.localLoans ?? 0;
+  const relationshipIncome = branch.profile === "wealth" ? 560 : branch.profile === "business" ? 455 : branch.profile === "mortgage" ? 385 : 310;
+  const productBreadth = 1 + Math.max(0, state.products.length - 1) * .065;
+  const serviceFactor = .72 + branch.satisfaction / 220;
+  const feeIncome = customers * relationshipIncome * productBreadth * serviceFactor;
+  const depositMargin = deposits * Math.max(.55, state.baseRate - state.depositRate + 1.25) / 100 / 12;
+  const lendingMargin = loans * Math.max(1.25, state.loanRate - state.baseRate) / 100 / 12;
+  const revenue = round(feeIncome + depositMargin + lendingMargin);
+  const profit = round(revenue - cost);
+  return { employees, annualPayroll, payroll, rent, marketing, operations, cost, revenue, profit, customers, deposits, loans };
+}
+
+export function getBranchUpgradeEconomicsV7(state: GameState, branch: BranchOffice) {
+  const current = getBranchEconomicsV7(state, branch);
+  const cost = branch.level === 1 ? 1_150_000 : branch.level === 2 ? 2_100_000 : 0;
+  const capacityGain = branch.level < 3 ? round(branch.capacity * 0.45) : 0;
+  const capacityUse = current.customers / Math.max(1, branch.capacity) * 100;
+  const demandUnlock = clamp((capacityUse - 72) / 28, 0, 1);
+  const expectedNewCustomers = round(capacityGain * demandUnlock * 0.9);
+  const revenuePerCustomer = current.revenue / Math.max(1, current.customers);
+  const monthlyRevenueGain = branch.level < 3 ? round(expectedNewCustomers * revenuePerCustomer + current.revenue * 0.025) : 0;
+  const operationsEfficiency = state.background === "Operations" ? 0.9 : 1;
+  const monthlyCostGain = branch.level < 3 ? round(3 * 52_000 / 12 * operationsEfficiency + branch.monthlyRent * 0.06 + 5_000) : 0;
+  const monthlyProfitGain = monthlyRevenueGain - monthlyCostGain;
+  const paybackMonths = monthlyProfitGain > 0 ? cost / monthlyProfitGain : null;
+  const viable = branch.level < 3 && capacityUse >= 75 && monthlyProfitGain > 0;
+  return { cost, capacityGain, capacityUse, expectedNewCustomers, monthlyRevenueGain, monthlyCostGain, monthlyProfitGain, paybackMonths, viable };
+}
+
 function runBranchAccounting(state: GameState): GameState {
-  let cashDelta = 0;
-  let totalRevenue = 0;
-  let totalCost = 0;
-  const branchOffices = state.branchOffices.map((branch) => {
-    const district = state.districts.find((item) => item.id === branch.districtId);
+  const balanced = syncBranchBalanceSheet(state);
+  let totalBranchProfit = 0;
+  const branchOffices = balanced.branchOffices.map((branch) => {
+    const district = balanced.districts.find((item) => item.id === branch.districtId);
     if (!district) return branch;
-    const manager = state.employeeRoster.find((employee) => employee.id === branch.managerId);
+    const manager = balanced.employeeRoster.find((employee) => employee.id === branch.managerId);
     const managerQuality = manager ? clamp((manager.skill + manager.leadership + manager.loyalty * .3) / 215, .55, 1.28) : .72;
     const mandate = branch.managerMandate ?? "manual";
     const mandateEffect = mandate === "growth" ? 1.15 : mandate === "autonomous" ? 1.08 : mandate === "guarded" ? 1.03 : .98;
@@ -80,48 +142,27 @@ function runBranchAccounting(state: GameState): GameState {
     const targetCustomers = Math.min(branch.capacity, round((district.population * .006 + profileDemand * 3.1) * managerQuality * mandateEffect * (1 - district.competition / 190)));
     const previousCustomers = branch.localCustomers ?? Math.min(branch.capacity, Math.max(120, round(targetCustomers * .78)));
     const localCustomers = clamp(round(previousCustomers * .72 + targetCustomers * .28), 20, branch.capacity);
-    const depositMultiplier = branch.localFocus === "deposits" ? 1.18 : branch.localFocus === "business" ? 1.12 : 1;
-    const lendingMultiplier = branch.localFocus === "lending" ? 1.18 : branch.profile === "mortgage" ? 1.12 : 1;
-    const localDeposits = Math.max(0, round(localCustomers * district.incomeIndex * 215 * depositMultiplier));
-    const localLoans = Math.max(0, round(localCustomers * district.incomeIndex * 122 * lendingMultiplier));
-    const feeIncome = localCustomers * (branch.profile === "wealth" ? 125 : branch.profile === "business" ? 92 : 54);
-    const depositIncome = localDeposits * .0023;
-    const lendingIncome = localLoans * Math.max(1.2, state.loanRate - state.baseRate) / 100 / 12;
-    const lastMonthRevenue = round(feeIncome + depositIncome + lendingIncome);
-    const staffingCost = branch.staffSlots * 5_400;
-    const managerCost = manager ? manager.salary * .12 : 0;
-    const localActivity = branch.managerBudget ?? 0;
-    const lastMonthCost = round(branch.monthlyRent + staffingCost + managerCost + localActivity);
-    const lastMonthProfit = round(lastMonthRevenue - lastMonthCost);
-    cashDelta += lastMonthProfit;
-    totalRevenue += lastMonthRevenue;
-    totalCost += lastMonthCost;
+    const updated = { ...branch, localCustomers };
+    const economics = getBranchEconomicsV7(balanced, updated);
+    totalBranchProfit += economics.profit;
     const lastManagerAction = manager && mandate !== "manual"
       ? `${manager.name} ran the ${branch.localFocus ?? "service"} mandate with ${mandate} authority.`
       : manager ? `${manager.name} reported results but waited for approval.` : "No branch manager is accountable for local performance.";
     return {
-      ...branch,
-      localCustomers,
-      localDeposits,
-      localLoans,
-      lastMonthRevenue,
-      lastMonthCost,
-      lastMonthProfit,
-      lifetimeProfit: (branch.lifetimeProfit ?? 0) + lastMonthProfit,
+      ...updated,
+      managerBudget: economics.marketing,
+      lastMonthRevenue: economics.revenue,
+      lastMonthCost: economics.cost,
+      lastMonthProfit: economics.profit,
+      lifetimeProfit: (branch.lifetimeProfit ?? 0) + economics.profit,
       lastManagerAction,
     };
   });
-
-  const totalContribution = round(cashDelta);
-  const next = {
-    ...state,
-    branchOffices,
-    cash: Math.max(0, state.cash + totalContribution),
-    totalProfit: state.totalProfit + totalContribution,
-    revenue: state.revenue + totalRevenue / 30,
-    expenses: state.expenses + totalCost / 30,
-  };
-  return addEvent(next, createEvent(state.day, totalContribution >= 0 ? "positive" : "warning", "Monthly branch accounts closed", `${branchOffices.length} locations produced a combined local contribution of ${totalContribution >= 0 ? "+" : ""}$${Math.abs(round(totalContribution / 1000))}k.`));
+  const total = round(totalBranchProfit);
+  return addEvent(
+    { ...balanced, branchOffices },
+    createEvent(state.day, total >= 0 ? "positive" : "warning", "Branch economics reconciled", `${branchOffices.length} locations reported a combined local result of ${total >= 0 ? "+" : "−"}${state.currency} ${Math.abs(round(total / 1000))}k. The consolidated group ledger already includes ordinary operations, so cash was not charged or credited a second time.`),
+  );
 }
 
 function collectionCaseForLoan(state: GameState, loan: ActiveLoan): CollectionCase {
@@ -153,7 +194,7 @@ function runLoanPerformanceCycle(state: GameState): GameState {
     if (loan.status === "written-off" || loan.outstanding <= 0) return loan;
     const macro = state.economicCycle === "recession" ? 1.8 : state.economicCycle === "slowdown" ? 1.35 : state.economicCycle === "boom" ? .7 : 1;
     const risk = { A: .018, B: .045, C: .095, D: .18 }[loan.riskGrade] * macro;
-    const roll = deterministic(`${loan.id}-${cycle}`);
+    const roll = seededValue(`${state.worldSeed}-${loan.id}-${cycle}-loan-performance`);
     const monthlyPayment = loan.principal / 120 + loan.outstanding * loan.rate / 100 / 12;
     let status = loan.status;
     let daysPastDue = loan.daysPastDue;
@@ -238,7 +279,7 @@ function runCompetitorCycle(state: GameState): GameState {
   if (state.competitors.length === 0) return state;
   const cycle = Math.floor(state.day / 30);
   const competitor = state.competitors[cycle % state.competitors.length];
-  const moveIndex = Math.floor(deterministic(`${competitor.id}-${cycle}`) * 4);
+  const moveIndex = Math.floor(seededValue(`${state.worldSeed}-${competitor.id}-${cycle}-competitor-move`) * 4);
   const type: CompetitorMove["type"] = ["pricing", "branch", "digital", "talent"][moveIndex] as CompetitorMove["type"];
   let description = "";
   let impact = 0;

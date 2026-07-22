@@ -7,7 +7,7 @@ import { employeeDepartment } from "./v8/gameplay";
 import { defaultExecutiveMandates } from "./v88/gameplay";
 import { generateCandidateMarket, generatedCompetitors } from "./v88/generation";
 
-export { PRODUCT_CATALOG } from "./catalog";
+export { PRODUCT_CATALOG, SERVICE_REASSIGNMENT } from "./catalog";
 export * from "./simulation";
 export * from "./actions";
 export * from "./v4/gameplay";
@@ -98,6 +98,7 @@ export function emptyGame(): GameState {
     creditLosses: 0,
     reputation: 48,
     satisfaction: 72,
+    serviceIntervention: null,
     brandStrength: 46,
     boardConfidence: 68,
     customers: 420,
