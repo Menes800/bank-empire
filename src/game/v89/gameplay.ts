@@ -1,7 +1,8 @@
 import { approveLoanRefined, counterLoanRefined, declineLoanRefined, startBranchUpgrade, startStrategicProject } from "../v4/gameplay";
 import { getCreditRecommendation } from "../v6/gameplay";
-import type { BankProject, BranchOffice, ExecutivePermission, ExecutiveRole, GameState, LoanApplication, ManagementLogEntry, ProjectKind } from "../types";
-import { clamp, round } from "../utils";
+import { getBranchEconomicsV7 } from "../v7/gameplay";
+import type { BankProject, BranchOffice, CashFlowSnapshot, ExecutivePermission, ExecutiveRole, GameState, LoanApplication, ManagementLogEntry, ProjectKind } from "../types";
+import { clamp, normaliseCurrencyTextState, round } from "../utils";
 import { advanceDaysV889, delegateInboxTaskV88, getMandateAssessmentV88 } from "../v88/mandates";
 import { repairCampaignState } from "../v88/gameplay";
 
@@ -160,18 +161,61 @@ export function reconcileManagementV89(state: GameState): GameState {
     if (assessment.canExecute) next = delegateInboxTaskV89(next, task.id);
   }
   next = processCreditApplicationsV89(next);
-  return next;
+  return normaliseCurrencyTextState(next);
+}
+
+function continuousCashHistory(state: GameState): GameState {
+  const rows = state.cashFlowHistory;
+  if (rows.length === 0) return state;
+  const last = rows[rows.length - 1];
+  if (Math.abs(last.closingCash - state.cash) > 2) return { ...state, cashFlowHistory: [] };
+
+  let start = rows.length - 1;
+  for (let index = rows.length - 1; index > 0; index -= 1) {
+    const current = rows[index];
+    const previous = rows[index - 1];
+    const identity = current.openingCash + current.depositInflows - current.customerWithdrawals + current.loanRepayments - current.newLending + current.operatingProfit + current.fundingChange + current.otherMovements;
+    if (Math.abs(identity - current.closingCash) > 2 || Math.abs(previous.closingCash - current.openingCash) > 2) break;
+    start = index - 1;
+  }
+  return start === 0 ? state : { ...state, cashFlowHistory: rows.slice(start) };
 }
 
 export function advanceDaysV89(state: GameState, days: number): GameState {
-  let current = reconcileManagementV89(state);
+  let current = continuousCashHistory(reconcileManagementV89(state));
   for (let index = 0; index < days; index += 1) {
+    const beforeState = current;
     const before = current.day;
     current = advanceDaysV889(current, 1);
     if (current.day === before) break;
     current = reconcileManagementV89(current);
+    current = continuousCashHistory(reconcileCashFlowV89(beforeState, current));
   }
   return current;
+}
+
+function reconcileCashFlowV89(before: GameState, after: GameState): GameState {
+  const depositChange = after.deposits - before.deposits;
+  const loanChange = after.loans - before.loans;
+  const fundingChange = after.wholesaleFunding - before.wholesaleFunding;
+  const depositInflows = Math.max(0, depositChange);
+  const customerWithdrawals = Math.max(0, -depositChange);
+  const newLending = Math.max(0, loanChange);
+  const loanRepayments = Math.max(0, -loanChange);
+  const knownClosing = before.cash + depositInflows - customerWithdrawals + loanRepayments - newLending + after.profit + fundingChange;
+  const snapshot: CashFlowSnapshot = {
+    day: after.day,
+    openingCash: before.cash,
+    depositInflows,
+    customerWithdrawals,
+    loanRepayments,
+    newLending,
+    operatingProfit: after.profit,
+    fundingChange,
+    otherMovements: after.cash - knownClosing,
+    closingCash: after.cash,
+  };
+  return { ...after, cashFlowHistory: [...after.cashFlowHistory.filter((row) => row.day !== after.day), snapshot].slice(-120) };
 }
 
 export function getProgrammeAssessmentV89(state: GameState, kind: StrategicProgrammeKind) {
@@ -205,21 +249,22 @@ export function startProgrammeV89(state: GameState, kind: StrategicProgrammeKind
   return logAction(started, { role, title: assessment.config.title, detail, amount: assessment.config.budget, outcome: "completed" });
 }
 
-export function branchMetricsV89(branch: BranchOffice) {
-  const customers = branch.localCustomers ?? Math.min(branch.capacity, 260 + branch.level * 100);
-  const revenue = branch.lastMonthRevenue ?? customers * 70;
-  const staffing = branch.staffSlots * 5_400;
-  const rent = branch.monthlyRent;
+export function branchMetricsV89(state: GameState, branch: BranchOffice) {
+  const economics = getBranchEconomicsV7(state, branch);
+  const customers = economics.customers;
+  const revenue = branch.lastMonthRevenue ?? economics.revenue;
+  const staffing = economics.payroll;
+  const rent = economics.rent;
   const managerCost = 0;
-  const localActivity = branch.managerBudget ?? 0;
-  const cost = branch.lastMonthCost ?? rent + staffing + managerCost + localActivity;
-  const profit = branch.lastMonthProfit ?? revenue - cost;
+  const localActivity = economics.marketing;
+  const cost = branch.lastMonthCost ?? economics.cost;
+  const profit = branch.lastMonthProfit ?? economics.profit;
   const capacityUse = customers / Math.max(1, branch.capacity) * 100;
-  return { customers, revenue, staffing, rent, managerCost, localActivity, cost, profit, capacityUse, deposits: branch.localDeposits ?? 0, loans: branch.localLoans ?? 0 };
+  return { customers, revenue, staffing, rent, managerCost, localActivity, cost, profit, capacityUse, deposits: economics.deposits, loans: economics.loans };
 }
 
 export function getBranchDiagnosisV89(state: GameState, branch: BranchOffice) {
-  const metrics = branchMetricsV89(branch);
+  const metrics = branchMetricsV89(state, branch);
   const district = state.districts.find((item) => item.id === branch.districtId);
   const reasons: string[] = [];
   if (metrics.customers < branch.capacity * .5) reasons.push("Customer volume is too low for the current cost base");
@@ -234,7 +279,7 @@ export function getBranchDiagnosisV89(state: GameState, branch: BranchOffice) {
 export function getBranchUpgradePlanV89(state: GameState, branchId: string) {
   const branch = state.branchOffices.find((item) => item.id === branchId);
   if (!branch) return null;
-  const metrics = branchMetricsV89(branch);
+  const metrics = branchMetricsV89(state, branch);
   const cost = branch.level === 1 ? 1_150_000 : branch.level === 2 ? 2_100_000 : 0;
   const capacityGain = branch.level < 3 ? round(branch.capacity * .45) : 0;
   const monthlyRevenueGain = Math.max(28_000, metrics.profit * .28 + Math.max(0, metrics.capacityUse - 78) * 4_200);

@@ -11,7 +11,7 @@ import type {
   ProductKey,
   ProductTerms,
 } from "../types";
-import { addEvent, clamp, createEvent, round } from "../utils";
+import { addEvent, clamp, createEvent, createSeededRandom, round } from "../utils";
 import { initialCandidates, STAGE_ORDER } from "./catalog";
 
 const stageRank = (stage: CampaignStage) => STAGE_ORDER.indexOf(stage);
@@ -95,7 +95,7 @@ function completeProject(state: GameState, project: BankProject): GameState {
   return addEvent(next, createEvent(state.day, "positive", `${project.name} completed`, "The project is operational and its benefits are now reflected across the bank."));
 }
 
-function advanceProjects(state: GameState): GameState {
+function advanceProjects(state: GameState, random: () => number): GameState {
   let next = state;
   const projects = state.projects.map((project) => {
     if (project.status === "completed") return project;
@@ -103,7 +103,7 @@ function advanceProjects(state: GameState): GameState {
     const executive = state.employeeRoster.find((employee) => employee.executiveRole === expectedRole);
     const leadershipBonus = executive ? Math.max(0, executive.leadership - 60) / 120 : 0;
     const delayChance = Math.max(0.003, project.risk / 2200 - leadershipBonus / 100);
-    const delayed = Math.random() < delayChance;
+    const delayed = random() < delayChance;
     const remainingDays = Math.max(0, project.remainingDays - (delayed ? 0 : 1));
     const status: BankProject["status"] = delayed ? "delayed" : remainingDays === 0 ? "completed" : "active";
     const updated: BankProject = { ...project, remainingDays, status, spent: Math.min(project.budget, project.spent + project.budget / Math.max(1, project.durationDays)) };
@@ -148,7 +148,7 @@ function applyAutomation(state: GameState): GameState {
   return next;
 }
 
-function updateActiveLoans(state: GameState): GameState {
+function updateActiveLoans(state: GameState, random: () => number): GameState {
   let cashDelta = 0;
   let losses = 0;
   const activeLoans: ActiveLoan[] = state.activeLoans.map((loan) => {
@@ -157,7 +157,7 @@ function updateActiveLoans(state: GameState): GameState {
     const riskBase = { A: 0.00004, B: 0.0001, C: 0.00023, D: 0.00055 }[loan.riskGrade] * macroStress;
     let status: ActiveLoan["status"] = loan.status;
     let daysPastDue = loan.daysPastDue;
-    if (Math.random() < riskBase) {
+    if (random() < riskBase) {
       daysPastDue += 30;
       status = daysPastDue >= 90 ? "defaulted" : daysPastDue >= 30 ? "delinquent" : "watch";
     }
@@ -169,7 +169,7 @@ function updateActiveLoans(state: GameState): GameState {
       outstanding = Math.max(0, outstanding - principalPayment);
       cashDelta += principalPayment + interestPayment;
       nextPaymentDay += 30;
-      if (daysPastDue > 0 && Math.random() > 0.55) daysPastDue = Math.max(0, daysPastDue - 30);
+      if (daysPastDue > 0 && random() > 0.55) daysPastDue = Math.max(0, daysPastDue - 30);
       if (daysPastDue === 0) status = "performing";
     }
     if (status === "defaulted") losses += Math.max(0, outstanding - outstanding * loan.collateral / 100);
@@ -247,7 +247,8 @@ function updateTutorial(state: GameState): GameState {
 }
 
 function advanceV4Day(state: GameState): GameState {
-  let next = updateSegments(updateActiveLoans(applyAutomation(advanceProjects(state))));
+  const random = createSeededRandom(`${state.worldSeed}-${state.day}-v4`);
+  let next = updateSegments(updateActiveLoans(applyAutomation(advanceProjects(state, random)), random));
   if (next.day % 30 === 0) {
     next = updateBoard(next);
     next = { ...next, reports: [createMonthlyReport(next), ...next.reports].slice(0, 36), candidatePool: next.candidatePool.length < 4 ? initialCandidates(next.day) : next.candidatePool };

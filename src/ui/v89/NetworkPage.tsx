@@ -64,8 +64,8 @@ function bestProfile(district: District): BranchProfile {
   const scores: Record<BranchProfile, number> = { retail: district.retailDemand, mortgage: district.mortgageDemand, business: district.businessDemand, wealth: district.wealthDemand };
   return profiles.reduce((best, item) => scores[item] > scores[best] ? item : best, "retail");
 }
-function branchStatus(branch: BranchOffice) {
-  const metrics = branchMetricsV89(branch);
+function branchStatus(game: GameState, branch: BranchOffice) {
+  const metrics = branchMetricsV89(game, branch);
   if (!branch.managerId) return { key: "vacant", label: "Needs manager" };
   if (metrics.profit < 0) return { key: "loss", label: "Loss-making" };
   if (metrics.capacityUse > 92) return { key: "pressure", label: "Capacity pressure" };
@@ -87,10 +87,10 @@ export function NetworkPageV89({ game, action }: { game: GameState; action: Game
   const managers = game.employeeRoster.filter((employee) => !employee.executiveRole && employee.leadership >= 45);
   const portfolio = useMemo(() => game.branchOffices.map((branch) => ({
     branch,
-    metrics: branchMetricsV89(branch),
-    status: branchStatus(branch),
+    metrics: branchMetricsV89(game, branch),
+    status: branchStatus(game, branch),
     manager: game.employeeRoster.find((employee) => employee.id === branch.managerId),
-  })), [game.branchOffices, game.employeeRoster]);
+  })), [game]);
   const totalProfit = portfolio.reduce((sum, item) => sum + item.metrics.profit, 0);
   const totalCustomers = portfolio.reduce((sum, item) => sum + item.metrics.customers, 0);
   const totalCapacity = portfolio.reduce((sum, item) => sum + item.branch.capacity, 0);

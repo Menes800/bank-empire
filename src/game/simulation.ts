@@ -5,13 +5,15 @@ import {
   addEvent,
   calculateRatios,
   clamp,
+  createSeededRandom,
   createEvent,
+  dailyPayrollCost,
   historyPoint,
   randomBetween,
   round,
 } from "./utils";
 
-function generateLoanApplication(state: GameState): LoanApplication {
+function generateLoanApplication(state: GameState, random: () => number): LoanApplication {
   const names = [
     "Hansen Property AS",
     "Nordlys Logistics",
@@ -27,14 +29,14 @@ function generateLoanApplication(state: GameState): LoanApplication {
     "Commercial property",
   ];
   const grades: LoanApplication["riskGrade"][] = ["A", "B", "B", "C", "C", "D"];
-  const riskGrade = grades[Math.floor(Math.random() * grades.length)];
+  const riskGrade = grades[Math.floor(random() * grades.length)];
   const riskMap = { A: 1.2, B: 2.8, C: 6.5, D: 12.5 };
   const collateralMap = { A: 92, B: 80, C: 64, D: 38 };
-  const amount = round(randomBetween(350_000, 3_800_000) / 50_000) * 50_000;
+  const amount = round(randomBetween(350_000, 3_800_000, random) / 50_000) * 50_000;
   return {
-    id: `loan-${state.day}-${Math.random().toString(36).slice(2, 8)}`,
-    customerName: names[Math.floor(Math.random() * names.length)],
-    segment: segments[Math.floor(Math.random() * segments.length)],
+    id: `loan-${state.day}-${Math.floor(random() * 36 ** 6).toString(36).padStart(6, "0")}`,
+    customerName: names[Math.floor(random() * names.length)],
+    segment: segments[Math.floor(random() * segments.length)],
     amount,
     rate: clamp(state.loanRate + riskMap[riskGrade] * 0.13, 3, 15),
     riskGrade,
@@ -43,7 +45,7 @@ function generateLoanApplication(state: GameState): LoanApplication {
   };
 }
 
-function updateEconomy(state: GameState) {
+function updateEconomy(state: GameState, random: () => number) {
   if (state.day % 30 !== 0) {
     return {
       baseRate: state.baseRate,
@@ -55,11 +57,11 @@ function updateEconomy(state: GameState) {
     };
   }
 
-  const shock = randomBetween(-0.34, 0.34);
+  const shock = randomBetween(-0.34, 0.34, random);
   const gdpGrowth = clamp(state.gdpGrowth + shock, -3.8, 5.2);
-  const inflation = clamp(state.inflation + randomBetween(-0.22, 0.22), 0.5, 8);
+  const inflation = clamp(state.inflation + randomBetween(-0.22, 0.22, random), 0.5, 8);
   const unemployment = clamp(
-    state.unemployment - gdpGrowth * 0.025 + randomBetween(-0.08, 0.08),
+    state.unemployment - gdpGrowth * 0.025 + randomBetween(-0.08, 0.08, random),
     1.8,
     10,
   );
@@ -67,7 +69,7 @@ function updateEconomy(state: GameState) {
     state.consumerConfidence +
       gdpGrowth * 0.7 -
       inflation * 0.15 +
-      randomBetween(-2.5, 2.5),
+      randomBetween(-2.5, 2.5, random),
     25,
     95,
   );
@@ -77,7 +79,7 @@ function updateEconomy(state: GameState) {
         ? 0.25
         : inflation < 1.5
           ? -0.25
-          : randomBetween(-0.1, 0.1)),
+          : randomBetween(-0.1, 0.1, random)),
     0.25,
     9,
   );
@@ -102,7 +104,7 @@ function updateEconomy(state: GameState) {
   } as const;
 }
 
-function updateCompetitors(state: GameState, marketMood: number): Competitor[] {
+function updateCompetitors(state: GameState, marketMood: number, random: () => number): Competitor[] {
   return state.competitors.map((competitor) => {
     const strategyGrowth =
       competitor.strategy === "digital"
@@ -114,17 +116,17 @@ function updateCompetitors(state: GameState, marketMood: number): Competitor[] {
             : 0.24;
     const gained = Math.max(
       0,
-      round((0.7 + strategyGrowth) * marketMood * randomBetween(0.65, 1.35)),
+      round((0.7 + strategyGrowth) * marketMood * randomBetween(0.65, 1.35, random)),
     );
     const deposits =
-      competitor.deposits + gained * randomBetween(8_000, 24_000);
-    const loans = competitor.loans + gained * randomBetween(4_000, 16_000);
+      competitor.deposits + gained * randomBetween(8_000, 24_000, random);
+    const loans = competitor.loans + gained * randomBetween(4_000, 16_000, random);
     const reputation = clamp(
-      competitor.reputation + randomBetween(-0.04, 0.06),
+      competitor.reputation + randomBetween(-0.04, 0.06, random),
       35,
       92,
     );
-    const reprice = state.day % 30 === 0 ? randomBetween(-0.15, 0.15) : 0;
+    const reprice = state.day % 30 === 0 ? randomBetween(-0.15, 0.15, random) : 0;
     return {
       ...competitor,
       customers: competitor.customers + gained,
@@ -146,7 +148,8 @@ export function advanceDay(state: GameState): GameState {
   if (state.gameOverReason || state.pendingDecision) return state;
 
   const nextDay = state.day + 1;
-  const economy = updateEconomy({ ...state, day: nextDay });
+  const random = createSeededRandom(`${state.worldSeed}-${nextDay}-simulation`);
+  const economy = updateEconomy({ ...state, day: nextDay }, random);
   const difficultyGrowth =
     state.difficulty === "relaxed"
       ? 1.16
@@ -158,7 +161,7 @@ export function advanceDay(state: GameState): GameState {
     0.45,
     1.45,
   );
-  const competitors = updateCompetitors({ ...state, day: nextDay }, marketMood);
+  const competitors = updateCompetitors({ ...state, day: nextDay }, marketMood, random);
   const competitorPressure = clamp(
     competitors.reduce(
       (sum, item) => sum + item.reputation + item.digitalLevel,
@@ -194,7 +197,7 @@ export function advanceDay(state: GameState): GameState {
     salesBonus *
     depositRateAppeal *
     (1.12 - competitorPressure * 0.18) *
-    randomBetween(0.82, 1.2);
+    randomBetween(0.82, 1.2, random);
   const customersGained = Math.max(0, round(grossCustomerDemand));
   const serviceChurn = Math.max(0, staffingPressure - 1) * 0.0018;
   const pricingChurn =
@@ -212,15 +215,15 @@ export function advanceDay(state: GameState): GameState {
   );
 
   const savingsBonus = state.products.includes("savings") ? 1.2 : 1;
-  const averageDeposit = randomBetween(8_500, 19_000) * savingsBonus;
+  const averageDeposit = randomBetween(8_500, 19_000, random) * savingsBonus;
   const newDeposits = customersGained * averageDeposit;
-  const lostDeposits = customersLost * randomBetween(9_000, 25_000);
+  const lostDeposits = customersLost * randomBetween(9_000, 25_000, random);
   const organicDepositGrowth =
-    state.deposits * randomBetween(-0.0002, 0.00055) * marketMood;
+    state.deposits * randomBetween(-0.0002, 0.00055, random) * marketMood;
   let bankRunOutflow = 0;
   if (state.bankRunRisk > 55) {
     bankRunOutflow =
-      state.deposits * randomBetween(0.001, 0.004) * (state.bankRunRisk / 100);
+      state.deposits * randomBetween(0.001, 0.004, random) * (state.bankRunRisk / 100);
   }
   const deposits = Math.max(
     0,
@@ -241,7 +244,7 @@ export function advanceDay(state: GameState): GameState {
   const smePower = state.products.includes("sme") ? 1.15 : 0.88;
   const lendingDemand =
     customers *
-    randomBetween(22, 45) *
+    randomBetween(22, 45, random) *
     loanRateAppeal *
     marketMood *
     mortgagePower *
@@ -256,7 +259,7 @@ export function advanceDay(state: GameState): GameState {
       lendingDemand * policyMultiplier * (1 - state.riskScore / 190),
     ),
   );
-  const repayments = state.loans * randomBetween(0.00042, 0.0007);
+  const repayments = state.loans * randomBetween(0.00042, 0.0007, random);
   const recessionMultiplier =
     economy.economicCycle === "recession"
       ? 2.25
@@ -278,7 +281,7 @@ export function advanceDay(state: GameState): GameState {
       recessionMultiplier *
       policyLossMultiplier *
       financeBonus *
-      randomBetween(0.72, 1.25),
+      randomBetween(0.72, 1.25, random),
   );
   const loans = Math.max(0, state.loans + newLoans - repayments - creditLosses);
   const nplRatio = clamp(
@@ -303,7 +306,7 @@ export function advanceDay(state: GameState): GameState {
   const feeIncome =
     customers * (2.5 + state.products.length * 0.7) * productFeePower;
   const branchEfficiency = state.background === "Operations" ? 0.9 : 1;
-  const payroll = state.employees * 218 * branchEfficiency;
+  const payroll = dailyPayrollCost(state);
   const branchCost = state.branches * 980 * branchEfficiency;
   const digitalCost = state.digitalLevel * 24;
   const complianceCost = 480 + Math.max(0, 90 - state.compliance) * 18;
@@ -311,7 +314,7 @@ export function advanceDay(state: GameState): GameState {
   const fraudLosses = round(
     Math.max(0, 72 - state.cyberSecurity) *
       fraudExposure *
-      randomBetween(4, 15),
+      randomBetween(4, 15, random),
   );
   const revenue = round(interestIncome + feeIncome);
   const expenses = round(
@@ -452,7 +455,7 @@ export function advanceDay(state: GameState): GameState {
       ...next,
       loanApplications: [
         ...next.loanApplications,
-        generateLoanApplication(next),
+        generateLoanApplication(next, random),
       ],
     };
   }
@@ -467,7 +470,7 @@ export function advanceDay(state: GameState): GameState {
     const pool = available.length > 0 ? available : DECISIONS;
     next = {
       ...next,
-      pendingDecision: pool[Math.floor(Math.random() * pool.length)],
+      pendingDecision: pool[Math.floor(random() * pool.length)],
     };
   }
 

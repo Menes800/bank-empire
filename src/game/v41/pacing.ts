@@ -1,6 +1,7 @@
 import { DECISIONS } from "../catalog";
 import { advanceDaysRefined } from "../v4/gameplay";
 import type { DecisionEvent, GameState } from "../types";
+import { seededValue } from "../utils";
 
 function wasRecentlyHandled(state: GameState, decision: DecisionEvent, days = 150) {
   return state.events.some(
@@ -16,7 +17,7 @@ function getDecision(state: GameState, id: string) {
 function chooseRoutineDecision(state: GameState) {
   const available = DECISIONS.filter((decision) => !wasRecentlyHandled(state, decision));
   const pool = available.length > 0 ? available : DECISIONS;
-  return pool[Math.floor(Math.random() * pool.length)] ?? null;
+  return pool[Math.floor(seededValue(`${state.worldSeed}-${state.day}-routine-decision`) * pool.length)] ?? null;
 }
 
 function applyCalmPacing(state: GameState): GameState {

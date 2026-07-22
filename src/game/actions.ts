@@ -1,6 +1,56 @@
 import { PRODUCT_CATALOG } from "./catalog";
-import type { GameState, LendingPolicy, ProductKey } from "./types";
-import { addEvent, clamp, createEvent, round } from "./utils";
+import type { BranchOffice, Competitor, GameState, LendingPolicy, ProductKey } from "./types";
+import { addEvent, clamp, createEvent, round, seededValue } from "./utils";
+
+function acquiredBranchOffices(state: GameState, competitor: Competitor): BranchOffice[] {
+  if (competitor.branches <= 0 || state.districts.length === 0) return [];
+  const occupied = new Set(state.branchOffices.map((branch) => branch.districtId));
+  const districts = [
+    ...state.districts.filter((district) => !occupied.has(district.id)),
+    ...state.districts.filter((district) => occupied.has(district.id)),
+  ];
+  const localCustomers = Math.ceil(competitor.customers / competitor.branches);
+  const capacity = Math.max(650, Math.ceil(localCustomers * 1.15 / 50) * 50);
+  const profile = competitor.strategy === "premium"
+    ? "wealth" as const
+    : competitor.strategy === "conservative"
+      ? "mortgage" as const
+      : competitor.strategy === "volume"
+        ? "business" as const
+        : "retail" as const;
+
+  return Array.from({ length: competitor.branches }, (_, index) => {
+    const district = districts[index % districts.length];
+    return {
+      id: `branch-acquired-${competitor.id}-${state.day}-${index + 1}`,
+      districtId: district.id,
+      name: `${competitor.name} ${index + 1}`,
+      level: 1,
+      profile,
+      capacity,
+      staffSlots: Math.max(8, Math.ceil(localCustomers / 90)),
+      monthlyRent: district.monthlyRent,
+      satisfaction: clamp(competitor.reputation + 8, 50, 90),
+      openedDay: state.day,
+      managerId: null,
+      managerMandate: "manual",
+      localFocus: "service",
+      managerBudget: 0,
+      managerControl: true,
+      operatingPriority: "balanced",
+      upgradeAuthority: "manual",
+      pendingUpgradeRecommendation: false,
+      localCustomers: Math.min(capacity, localCustomers),
+      localDeposits: round(competitor.deposits / competitor.branches),
+      localLoans: round(competitor.loans / competitor.branches),
+      lastMonthRevenue: 0,
+      lastMonthCost: 0,
+      lastMonthProfit: 0,
+      lifetimeProfit: 0,
+      lastManagerAction: "Acquired branch awaiting an accountable manager and integration review.",
+    };
+  });
+}
 
 export function setRates(
   state: GameState,
@@ -85,7 +135,8 @@ export function chooseDecision(state: GameState, choiceId: string): GameState {
 export function runMarketingCampaign(state: GameState): GameState {
   const cost = 180_000;
   if (state.cash < cost) return state;
-  const gained = 45 + round(Math.random() * 45);
+  const campaignCount = state.events.filter((event) => event.title === "Campaign launched").length;
+  const gained = 45 + round(seededValue(`${state.worldSeed}-${state.day}-${campaignCount}-campaign`) * 45);
   return addEvent(
     {
       ...state,
@@ -414,6 +465,8 @@ export function acquireCompetitor(
     state.reputation < 68
   )
     return state;
+  const acquiredBranches = acquiredBranchOffices(state, competitor);
+  const branchOffices = [...state.branchOffices, ...acquiredBranches];
   return addEvent(
     {
       ...state,
@@ -425,7 +478,8 @@ export function acquireCompetitor(
       loans: state.loans + competitor.loans,
       customers: state.customers + competitor.customers,
       employees: state.employees + Math.max(5, competitor.branches * 5),
-      branches: state.branches + competitor.branches,
+      branchOffices,
+      branches: branchOffices.length,
       digitalLevel: clamp(
         Math.max(state.digitalLevel, competitor.digitalLevel * 0.82),
         1,

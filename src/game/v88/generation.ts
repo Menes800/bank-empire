@@ -6,6 +6,9 @@ import type {
   HomeMarket,
   NameStyle,
 } from "../types";
+import { hashSeed, seededValue } from "../utils";
+
+export { hashSeed, seededValue } from "../utils";
 
 const localNames: Record<HomeMarket, { first: string[]; last: string[]; places: string[]; bankWords: string[] }> = {
   NO: { first: ["Ingrid", "Sofie", "Henrik", "Marius", "Nora", "Amir", "Ida", "Elias", "Mina", "Thea", "Oskar", "Lea"], last: ["Aasen", "Berg", "Dahl", "Foss", "Hauge", "Lie", "Lunde", "Moen", "Nilsen", "Solheim", "Strand", "Vik"], places: ["Fjord", "Nord", "Harbour", "Viken", "Oslo", "Aurora"], bankWords: ["Bank", "Trust", "Finans", "Sparebank", "Capital"] },
@@ -39,24 +42,6 @@ const styles = ["Analytical", "Decisive", "Coaching", "Collaborative", "Commerci
 const strengths = ["Builds strong teams", "Excellent with numbers", "Calm in crises", "Fast execution", "Strong customer judgement", "Board credibility", "Technology depth", "Commercial instinct"];
 const weaknesses = ["Can overanalyse", "Impatient with slow teams", "Avoids conflict", "Takes too much risk", "Needs strong deputies", "Can become too cautious", "Limited international experience", "Weak internal communication"];
 const opinions = ["Prioritise profitable growth", "Protect trust before expansion", "Invest heavily in digital", "Keep capital buffers high", "Win locally before going national", "Build management depth early", "Use acquisitions selectively"];
-
-export function hashSeed(value: string | number): number {
-  const text = String(value);
-  let hash = 2166136261;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-export function seededValue(seed: string | number): number {
-  let value = hashSeed(seed) || 1;
-  value += 0x6d2b79f5;
-  value = Math.imul(value ^ value >>> 15, value | 1);
-  value ^= value + Math.imul(value ^ value >>> 7, value | 61);
-  return ((value ^ value >>> 14) >>> 0) / 4294967296;
-}
 
 function pick<T>(items: T[], seed: string | number): T {
   return items[Math.floor(seededValue(seed) * items.length) % items.length];
